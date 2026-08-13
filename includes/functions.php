@@ -119,11 +119,11 @@ function load_inquiries(PDO $pdo, ?array $user = null): array {
         $stmt = $pdo->prepare("SELECT DISTINCT i.* FROM inquiries i
             LEFT JOIN inquiry_steps s ON s.inquiry_id=i.id
             WHERE i.created_by=? OR i.current_owner=? OR s.assigned_to=? OR s.assigned_by=?
-            ORDER BY i.created_at DESC");
+            ORDER BY i.created_at DESC, i.id DESC");
         $stmt->execute([$n,$n,$n,$n]);
         $inqs = $stmt->fetchAll();
     } else {
-        $inqs = $pdo->query("SELECT * FROM inquiries ORDER BY created_at DESC")->fetchAll();
+        $inqs = $pdo->query("SELECT * FROM inquiries ORDER BY created_at DESC, id DESC")->fetchAll();
     }
 
     if (empty($inqs)) return [];

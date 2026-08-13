@@ -136,6 +136,12 @@ if ($action === 'step_status') {
                     'Task completed — '.$srow['inq_id'],
                     $user['name'].' completed a task ('.$srow['client'].'): '.$preview.$remarkSuffix,
                     $srow['inq_id']);
+            // Also notify whoever assigned the task, if different from the creator
+            if ($srow['assigned_by'] !== $user['name'] && $srow['assigned_by'] !== $srow['created_by'])
+                notify_user($pdo, $srow['assigned_by'],
+                    'Task completed — '.$srow['inq_id'],
+                    $user['name'].' completed a task you assigned ('.$srow['client'].'): '.$preview.$remarkSuffix,
+                    $srow['inq_id']);
         } elseif ($newStatus === 'Rejected') {
             // Notify the assignee so they know to rework
             if ($srow['assigned_to'] !== $user['name'])

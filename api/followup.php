@@ -32,6 +32,13 @@ if ($action === 'add') {
 // ─── Complete ─────────────────────────────────────────────────────────────────
 if ($action === 'complete') {
     $id = (int)($b['id'] ?? 0);
+    if (!is_admin()) {
+        $row = $pdo->prepare("SELECT created_by,assigned_to FROM follow_ups WHERE id=?");
+        $row->execute([$id]);
+        $fu = $row->fetch();
+        if (!$fu || ($fu['created_by'] !== $user['name'] && $fu['assigned_to'] !== $user['name']))
+            json_response(['ok'=>false,'message'=>'Only the creator, assignee, or an admin can complete this.'], 403);
+    }
     $pdo->prepare("UPDATE follow_ups SET completed=1,completed_at=NOW(),completed_by=? WHERE id=?")
         ->execute([$user['name'], $id]);
     json_response(['ok'=>true]);

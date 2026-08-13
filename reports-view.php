@@ -122,7 +122,7 @@
       <div class="overflow-x-auto">
         <table class="w-full text-[11px]" style="min-width:480px">
           <thead>
-            <tr style="background:#F8FAFC;border-bottom:2px solid #E4E7EC">
+            <tr class="bg-[#F8FAFC]" style="border-bottom:2px solid #E4E7EC">
               <th class="text-left px-5 py-3 text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]">Member</th>
               <th class="text-center px-4 py-3 text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]">Inquiries</th>
               <th class="text-center px-4 py-3 text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]">Open</th>
@@ -173,87 +173,6 @@
       </div>
     </div>
   </template>
-
-  <!-- ── Inquiry List ── -->
-  <div class="bg-white border border-[#E4E7EC] rounded-[12px]" style="box-shadow:0 1px 4px rgba(7,29,43,0.04)">
-
-    <!-- List header -->
-    <div class="px-5 py-3.5 border-b border-[#E4E7EC] flex items-center justify-between gap-3">
-      <div>
-        <div class="text-[13px] font-bold text-[#172B3A]">Inquiry List</div>
-        <div class="text-[11px] text-[#667085]" x-text="rptInquiries.length+' inquiries · '+rptPeriodLabel+(rptUser?' · '+rptUser:'')"></div>
-      </div>
-      <!-- Clear user filter pill -->
-      <template x-if="rptUser">
-        <button @click="rptUser=''"
-                class="flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-[#EEF4FF] text-[#175CD3] hover:bg-[#DBEAFE] transition-colors">
-          <span x-text="rptUser"></span>
-          <span class="text-[13px] leading-none">×</span>
-        </button>
-      </template>
-    </div>
-
-    <!-- Table -->
-    <div class="overflow-x-auto">
-      <table class="w-full text-[11px]" style="min-width:560px">
-        <thead>
-          <tr style="background:#F8FAFC;border-bottom:2px solid #E4E7EC">
-            <th class="text-left px-5 py-3 text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]">ID</th>
-            <th class="text-left px-4 py-3 text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]">Client / Company</th>
-            <th class="text-left px-4 py-3 text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]">Status</th>
-            <template x-if="isAdmin">
-              <th class="text-left px-4 py-3 text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]">Owner</th>
-            </template>
-            <th class="text-left px-4 py-3 text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]">Due Date</th>
-            <th class="text-left px-4 py-3 text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]">Created</th>
-          </tr>
-        </thead>
-        <tbody>
-          <template x-if="rptInquiries.length===0">
-            <tr>
-              <td :colspan="isAdmin?6:5" class="px-5 py-12 text-center">
-                <div class="text-[12px] font-semibold text-[#344054]">No inquiries in this period</div>
-                <div class="text-[11px] text-[#667085] mt-1">Try a different date range or filter</div>
-              </td>
-            </tr>
-          </template>
-          <template x-for="(inq,i) in rptInquiries" :key="inq.id">
-            <tr class="border-b border-[#E4E7EC] last:border-0 hover:bg-[#F9FAFB] transition-colors"
-                :class="i%2===0?'':'bg-[#FAFBFC]'">
-              <td class="px-5 py-3 font-bold text-[#071D2B] whitespace-nowrap" x-text="inq.id"></td>
-              <td class="px-4 py-3">
-                <div class="font-semibold text-[#172B3A]" x-text="inq.client"></div>
-                <div class="text-[10px] text-[#98A2B3]" x-show="inq.company" x-text="inq.company"></div>
-              </td>
-              <td class="px-4 py-3 whitespace-nowrap">
-                <template x-if="_rptClosed(inq)">
-                  <span class="inline-flex items-center gap-1 text-[9px] font-extrabold px-2 py-[3px] rounded-full bg-[#ECFDF3] text-[#16803C]">● Closed</span>
-                </template>
-                <template x-if="!_rptClosed(inq) && inq.overdue">
-                  <span class="inline-flex items-center gap-1 text-[9px] font-extrabold px-2 py-[3px] rounded-full bg-[#FEE2E2] text-[#B42318]">● Overdue</span>
-                </template>
-                <template x-if="!_rptClosed(inq) && !inq.overdue">
-                  <span class="inline-flex items-center gap-1 text-[9px] font-extrabold px-2 py-[3px] rounded-full bg-[#EFF8FF] text-[#026AA2]">● Active</span>
-                </template>
-              </td>
-              <template x-if="isAdmin">
-                <td class="px-4 py-3 text-[#344054] whitespace-nowrap" x-text="inq.current_owner||inq.created_by||'—'"></td>
-              </template>
-              <td class="px-4 py-3 whitespace-nowrap">
-                <span x-show="inq.due_date"
-                      :class="(!_rptClosed(inq)&&inq.overdue)?'text-[#B42318] font-bold':'text-[#667085]'"
-                      x-text="inq.due_date"></span>
-                <span x-show="!inq.due_date" class="text-[#C4CAD4]">—</span>
-              </td>
-              <td class="px-4 py-3 text-[#98A2B3] whitespace-nowrap"
-                  x-text="(inq.date||inq.created_at||'').slice(0,10)||'—'"></td>
-            </tr>
-          </template>
-        </tbody>
-      </table>
-    </div>
-
-  </div>
 
 
 </div><!-- /reports -->

@@ -44,6 +44,7 @@ try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS inquiries (
         id             VARCHAR(20)  PRIMARY KEY,
         date           VARCHAR(20)  NOT NULL,
+        inquiry_type   VARCHAR(20)  NOT NULL DEFAULT 'Client Project',
         client         VARCHAR(150) NOT NULL,
         designation    VARCHAR(150),
         company        VARCHAR(150) NOT NULL,
@@ -187,6 +188,7 @@ $migrations = [
     ['table'=>'inquiries',     'column'=>'designation',      'sql'=>"ALTER TABLE inquiries ADD COLUMN designation VARCHAR(150) NULL AFTER client"],
     ['table'=>'inquiries',     'column'=>'email_subject',    'sql'=>"ALTER TABLE inquiries ADD COLUMN email_subject VARCHAR(255) NULL AFTER website"],
     ['table'=>'inquiries',     'column'=>'admin_remark',     'sql'=>"ALTER TABLE inquiries ADD COLUMN admin_remark TEXT NULL"],
+    ['table'=>'inquiries',     'column'=>'inquiry_type',     'sql'=>"ALTER TABLE inquiries ADD COLUMN inquiry_type VARCHAR(20) NOT NULL DEFAULT 'Client Project' AFTER date"],
 ];
 
 foreach ($migrations as $m) {

@@ -15,6 +15,7 @@ if ($method === 'GET') {
 
 // POST — create new inquiry
 if ($method === 'POST') {
+try {
     $b = get_json_body();
     $createdBy   = $user['name']; // always the logged-in user, not overridable
     $inquiryType = ($b['inquiryType'] ?? 'Client Project') === 'Internal Usage' ? 'Internal Usage' : 'Client Project';
@@ -86,6 +87,9 @@ if ($method === 'POST') {
     $inqRow['steps'] = array_map(fn($s) => array_merge($s, ['attachments'=>[], 'overdue'=>false]), $sStmt->fetchAll());
 
     json_response(['ok'=>true,'id'=>$id,'inquiry'=>$inqRow]);
+} catch (Exception $e) {
+    json_response(['ok'=>false,'message'=>'Server error: '.$e->getMessage()], 500);
+}
 }
 
 json_response(['ok'=>false,'message'=>'Method not allowed'], 405);

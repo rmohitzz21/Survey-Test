@@ -1,0 +1,113 @@
+/* ── Global dark mode — scoped under body.dark-mode ──
+   No Tailwind dark: build exists (app.css has no darkMode config), so this
+   overrides every bg-[#hex]/text-[#hex]/border-[#hex] utility class actually
+   used in index.php + reminder.php with a higher-specificity descendant rule. */
+
+body.dark-mode{background:#0D1117!important;color:#E6EAF0;}
+
+/* Surfaces */
+body.dark-mode .bg-white{background:#151B23;}
+body.dark-mode .bg-\[\#F2F4F7\],
+body.dark-mode .bg-\[\#F9FAFB\]{background:#232A33;}
+body.dark-mode .bg-\[\#F8FAFC\],
+body.dark-mode .bg-\[\#F7F8FA\],
+body.dark-mode .bg-\[\#FAFBFC\]{background:#1B222B;}
+body.dark-mode .bg-\[\#E4E7EC\]{background:#2A323D;}
+body.dark-mode .hover\:bg-\[\#E4E7EC\]:hover{background:#2A323D;}
+body.dark-mode .hover\:bg-\[\#F9FAFB\]:hover,
+body.dark-mode .hover\:bg-\[\#F2F4F7\]:hover{background:#232A33;}
+
+/* Accent tint surfaces (badges, notices, hover states) */
+body.dark-mode .bg-\[\#EEF4FF\],
+body.dark-mode .bg-\[\#F5F8FF\],
+body.dark-mode .bg-\[\#F5F9FF\]{background:#16223A;}
+body.dark-mode .hover\:bg-\[\#EEF4FF\]:hover,
+body.dark-mode .hover\:bg-\[\#F5F8FF\]:hover,
+body.dark-mode .hover\:bg-\[\#F5F9FF\]:hover,
+body.dark-mode .hover\:bg-\[\#DBEAFE\]:hover{background:#16223A;}
+body.dark-mode .bg-\[\#ECFDF3\],
+body.dark-mode .bg-\[\#F0FDF4\]{background:#0F2B20;}
+body.dark-mode .bg-\[\#FEF3F2\],
+body.dark-mode .bg-\[\#FFF8F8\],
+body.dark-mode .bg-\[\#FFF1F0\],
+body.dark-mode .bg-\[\#FFF5F5\],
+body.dark-mode .bg-\[\#FEE2E2\]{background:#34191A;}
+body.dark-mode .hover\:bg-\[\#FEF3F2\]:hover,
+body.dark-mode .hover\:bg-\[\#FEE2E2\]:hover{background:#34191A;}
+body.dark-mode .bg-\[\#FFFAEB\],
+body.dark-mode .bg-\[\#FFF7ED\],
+body.dark-mode .bg-\[\#FFF6ED\]{background:#332913;}
+body.dark-mode .bg-\[\#EFF8FF\]{background:#12283A;}
+body.dark-mode .bg-\[\#F4F3FF\]{background:#241C3D;}
+
+/* Text */
+body.dark-mode .text-\[\#172B3A\],
+body.dark-mode .text-\[\#071D2B\]{color:#E9ECF1;}
+body.dark-mode .text-\[\#344054\]{color:#C6CDD8;}
+body.dark-mode .hover\:text-\[\#344054\]:hover{color:#C6CDD8;}
+body.dark-mode .hover\:text-\[\#172B3A\]:hover{color:#E9ECF1;}
+body.dark-mode .text-\[\#667085\]{color:#93A0B4;}
+body.dark-mode .text-\[\#98A2B3\]{color:#6B7685;}
+body.dark-mode .text-\[\#B8CCED\]{color:#56637A;}
+body.dark-mode .text-\[\#D1D9E6\],
+body.dark-mode .text-\[\#C4CAD4\]{color:#3A4452;}
+body.dark-mode .placeholder\:text-\[\#B8CCED\]::placeholder{color:#3A4452;}
+
+/* Status text (brightened for contrast on dark surfaces) */
+body.dark-mode .text-\[\#B42318\]{color:#F87171;}
+body.dark-mode .hover\:text-\[\#B42318\]:hover{color:#F87171;}
+body.dark-mode .text-\[\#175CD3\]{color:#6DA8FF;}
+body.dark-mode .hover\:text-\[\#175CD3\]:hover{color:#6DA8FF;}
+body.dark-mode .text-\[\#1268F3\]{color:#5B9BFF;}
+body.dark-mode .hover\:text-\[\#1268F3\]:hover{color:#5B9BFF;}
+body.dark-mode .text-\[\#16803C\],
+body.dark-mode .text-\[\#166534\],
+body.dark-mode .text-\[\#15803D\]{color:#4ADE80;}
+body.dark-mode .text-\[\#026AA2\]{color:#38BDF8;}
+body.dark-mode .text-\[\#B54708\],
+body.dark-mode .text-\[\#B45309\]{color:#FBBF24;}
+body.dark-mode .text-\[\#5925DC\]{color:#A78BFA;}
+body.dark-mode .text-\[\#C2410C\],
+body.dark-mode .text-\[\#C4320A\]{color:#FB923C;}
+
+/* Borders */
+body.dark-mode .border-\[\#E4E7EC\],
+body.dark-mode .border-\[\#F2F4F7\]{border-color:#2A323D;}
+body.dark-mode .divide-\[\#F2F4F7\] > * + *,
+body.dark-mode .divide-\[\#E4E7EC\] > * + *{border-color:#2A323D;}
+body.dark-mode .border-\[\#D1D9E6\]{border-color:#39424F;}
+body.dark-mode .border-\[\#FECDCA\]{border-color:#5C2323;}
+body.dark-mode .border-\[\#BBF7D0\],
+body.dark-mode .border-\[\#D1FAE5\]{border-color:#1F4A38;}
+body.dark-mode .border-\[\#FDE68A\],
+body.dark-mode .border-\[\#FEF0C7\]{border-color:#4A3B14;}
+body.dark-mode .border-\[\#DBEAFE\],
+body.dark-mode .border-\[\#BAE6FD\],
+body.dark-mode .border-\[\#C7D7FA\]{border-color:#1E3A5F;}
+
+/* Form controls */
+body.dark-mode input,
+body.dark-mode select,
+body.dark-mode textarea,
+body.dark-mode [contenteditable]{background:#151B23;color:#E9ECF1;}
+body.dark-mode input::placeholder,
+body.dark-mode textarea::placeholder{color:#56637A;}
+body.dark-mode .rich-editor:empty::before{color:#56637A;}
+body.dark-mode input[readonly],
+body.dark-mode .cursor-not-allowed{background:#0F1319!important;color:#6B7685!important;}
+body.dark-mode ::-webkit-scrollbar-thumb{background:#2A323D;}
+
+/* Flatpickr popup (appended to <body>, so this reaches it) */
+body.dark-mode .flatpickr-calendar{background:#151B23!important;border-color:#2A323D!important;box-shadow:0 8px 32px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3)!important;}
+body.dark-mode .flatpickr-day{color:#C6CDD8!important;}
+body.dark-mode .flatpickr-day:hover:not(.selected){background:#1E2A3D!important;}
+body.dark-mode .flatpickr-day.prevMonthDay,
+body.dark-mode .flatpickr-day.nextMonthDay{color:#3A4452!important;}
+body.dark-mode .flatpickr-weekdays,
+body.dark-mode span.flatpickr-weekday{background:#16223A!important;}
+body.dark-mode .flatpickr-time{border-top-color:#2A323D!important;}
+body.dark-mode .flatpickr-time input.flatpickr-hour,
+body.dark-mode .flatpickr-time input.flatpickr-minute{color:#C6CDD8!important;background:transparent!important;}
+body.dark-mode .numInputWrapper:hover,
+body.dark-mode .flatpickr-time input:focus,
+body.dark-mode .flatpickr-time input:hover{background:#1E2A3D!important;}

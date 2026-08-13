@@ -30,6 +30,7 @@ $inqList = $pdo->query("SELECT id,client,company FROM inquiries ORDER BY created
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap">
 <link rel="stylesheet" href="assets/app.css">
+<link rel="stylesheet" href="assets/dark-mode.css">
 <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.3/dist/cdn.min.js"></script>
 <style>
   html,body{height:100%;overflow:hidden;}
@@ -48,7 +49,7 @@ $inqList = $pdo->query("SELECT id,client,company FROM inquiries ORDER BY created
 </style>
 </head>
 <body class="h-full flex" style="background:#F4F6F8;font-family:'Inter',system-ui,sans-serif"
-      x-data="reminderApp()" x-init="init()">
+      x-data="reminderApp()" x-init="init()" :class="darkMode?'dark-mode':''">
 
 <!-- Toast -->
 <div class="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none">
@@ -126,10 +127,16 @@ $inqList = $pdo->query("SELECT id,client,company FROM inquiries ORDER BY created
         <h1 class="text-[18px] font-bold text-[#071D2B]">Reminders</h1>
       </div>
     </div>
-    <button @click="addOpen=true" class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors flex items-center gap-1.5">
-      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      Add Follow-up
-    </button>
+    <div class="flex items-center gap-2">
+      <button type="button" @click="toggleDarkMode()" class="text-[#667085] hover:text-[#172B3A] transition-colors p-1.5" :title="darkMode?'Switch to light mode':'Switch to dark mode'">
+        <svg x-show="!darkMode" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <svg x-show="darkMode" class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+      <button @click="addOpen=true" class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors flex items-center gap-1.5">
+        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        Add Follow-up
+      </button>
+    </div>
   </div>
 
   <!-- Content -->
@@ -153,7 +160,7 @@ $inqList = $pdo->query("SELECT id,client,company FROM inquiries ORDER BY created
     <div class="bg-white rounded-[12px] border border-[#E4E7EC] overflow-auto" style="box-shadow:0 1px 4px rgba(7,29,43,0.04)">
       <table class="w-full min-w-[640px] text-[12px] border-collapse">
         <thead>
-          <tr style="background:#F9FAFB;border-bottom:1px solid #E4E7EC">
+          <tr class="bg-[#F9FAFB] border-b border-[#E4E7EC]">
             <th class="px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.06em] text-[#667085] whitespace-nowrap">Status</th>
             <th class="px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.06em] text-[#667085] whitespace-nowrap">Date / Time</th>
             <th class="px-4 py-2.5 text-left text-[10px] font-extrabold uppercase tracking-[0.06em] text-[#667085] whitespace-nowrap">Inquiry</th>
@@ -166,7 +173,7 @@ $inqList = $pdo->query("SELECT id,client,company FROM inquiries ORDER BY created
         <tbody>
           <template x-for="fu in tableRows" :key="fu.id">
             <tr style="border-bottom:1px solid #F2F4F7"
-                :style="fuStatus(fu)==='overdue'?'background:#FFF5F5':fuStatus(fu)==='today'?'background:#EFF6FF':''">
+                :style="fuStatus(fu)==='overdue'?(darkMode?'background:#241A1B':'background:#FFF5F5'):fuStatus(fu)==='today'?(darkMode?'background:#16223A':'background:#EFF6FF'):''">
               <td class="px-4 py-2.5 whitespace-nowrap">
                 <span class="text-[10px] font-extrabold px-2 py-0.5 rounded-full"
                       :class="fuStatus(fu)==='overdue'?'bg-[#FEF3F2] text-[#B42318]':fuStatus(fu)==='today'?'bg-[#EEF4FF] text-[#175CD3]':fuStatus(fu)==='upcoming'?'bg-[#F2F4F7] text-[#667085]':'bg-[#ECFDF3] text-[#16803C]'"
@@ -280,6 +287,8 @@ function reminderApp() {
     tableFilter: 'pending',
     addErr: '',
     addForm: { inquiryId:'', note:'', date: new Date().toLocaleDateString('en-CA'), time:'', assignedTo:'' },
+    darkMode: localStorage.getItem('sp_theme')==='dark',
+    toggleDarkMode(){ this.darkMode=!this.darkMode; localStorage.setItem('sp_theme', this.darkMode?'dark':'light'); },
 
     init() {},
 
