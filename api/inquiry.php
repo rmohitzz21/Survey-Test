@@ -177,6 +177,23 @@ if ($action === 'admin_remark') {
     json_response(['ok'=>true,'data'=>load_inquiries($pdo,$user)]);
 }
 
+// ─── Team Remark on Inquiry — written by whoever is on the team, read by the creator ──
+if ($action === 'team_remark') {
+    $id = $b['inquiryId'] ?? '';
+    if (!is_admin()) {
+        $chk = $pdo->prepare("SELECT created_by FROM inquiries i WHERE i.id=? AND (
+            i.created_by=? OR i.current_owner=?
+            OR EXISTS (SELECT 1 FROM inquiry_steps s WHERE s.inquiry_id=i.id AND (s.assigned_to=? OR s.assigned_by=?))
+        )");
+        $chk->execute([$id, $user['name'], $user['name'], $user['name'], $user['name']]);
+        if (!$chk->fetch())
+            json_response(['ok'=>false,'message'=>'Only the inquiry creator or someone on its team can add a remark.'], 403);
+    }
+    $pdo->prepare("UPDATE inquiries SET team_remark=?, team_remark_by=? WHERE id=?")
+        ->execute([$b['remark'] ?? null, $user['name'], $id]);
+    json_response(['ok'=>true,'data'=>load_inquiries($pdo,$user)]);
+}
+
 // ─── Save Step Remark ─────────────────────────────────────────────────────────
 if ($action === 'step_remark') {
     $chk = $pdo->prepare("SELECT assigned_to FROM inquiry_steps WHERE id=?");
@@ -245,7 +262,12 @@ if ($action === 'update_step_assignee') {
     $oldRow = $pdo->prepare("SELECT assigned_to, instruction FROM inquiry_steps WHERE id=?");
     $oldRow->execute([$b['stepId']]);
     $old = $oldRow->fetch();
-    $pdo->prepare("UPDATE inquiry_steps SET assigned_to=? WHERE id=?")->execute([$assignedTo, $b['stepId']]);
+    if ($old && $old['assigned_to'] !== $assignedTo) {
+        // Previous assignee's remark must not be shown as if the new assignee wrote it.
+        $pdo->prepare("UPDATE inquiry_steps SET assigned_to=?, remark=NULL WHERE id=?")->execute([$assignedTo, $b['stepId']]);
+    } else {
+        $pdo->prepare("UPDATE inquiry_steps SET assigned_to=? WHERE id=?")->execute([$assignedTo, $b['stepId']]);
+    }
     if (!empty($b['inquiryId'])) {
         $pdo->prepare("UPDATE inquiries SET current_owner=? WHERE id=?")->execute([$assignedTo, $b['inquiryId']]);
         $instr   = $old['instruction'] ?? '';

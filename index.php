@@ -11,7 +11,7 @@ $inquiries = load_inquiries($pdo, $user);
 $accounts  = load_accounts($pdo);
 $nextId    = next_inquiry_id($pdo);
 
-// Today's and overdue follow-ups for dashboard widget — only assigned to current user
+// Today's and overdue follow-ups for dashboard widget  only assigned to current user
 $_fuToday = date('Y-m-d');
 $_fuStmt  = $pdo->prepare("SELECT f.*,i.client,i.company FROM follow_ups f JOIN inquiries i ON i.id=f.inquiry_id WHERE f.completed=0 AND f.follow_up_date<=? AND f.assigned_to=? ORDER BY f.follow_up_date ASC,f.follow_up_time ASC");
 $_fuStmt->execute([$_fuToday, $user['name']]);
@@ -23,7 +23,7 @@ $_rmStmt->execute([$user['name'], $user['name']]);
 $allFollowUps = $_rmStmt->fetchAll();
 foreach ($allFollowUps as &$_rfu) { $_rfu['completed'] = (int)$_rfu['completed']; } unset($_rfu);
 
-// All unique client names from every inquiry — for global autocomplete (not role-filtered)
+// All unique client names from every inquiry  for global autocomplete (not role-filtered)
 $_allClientNames = $pdo->query("SELECT DISTINCT client FROM inquiries WHERE client!='' ORDER BY client")->fetchAll(PDO::FETCH_COLUMN);
 
 $allStages = ['Inquiry','Communication / Proposal','Decision','Project Execution','Closure'];
@@ -198,6 +198,51 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
       <?php endif; ?>
     </button>
 
+    <!-- Messages -->
+    <button @click="view='messages'" :title="collapsed ? 'Messages' : undefined"
+            class="w-full flex items-center gap-3 py-2.5 text-[12px] font-semibold transition-colors relative"
+            :class="[view==='messages' ? 'bg-[#EEF4FF] text-[#175CD3]' : 'text-[#344054] hover:bg-[#F9FAFB]', collapsed ? 'justify-center px-0' : 'px-4']">
+      <span x-show="view==='messages' && !collapsed" class="absolute left-0 top-1 bottom-1 w-[3px] bg-[#1268F3] rounded-r-full"></span>
+      <span class="relative shrink-0">
+        <svg class="w-4 h-4"><use href="#icon-message-circle"/></svg>
+        <span x-show="unreadMessages>0" class="absolute -top-1.5 -right-1.5 text-[8px] font-extrabold w-3.5 h-3.5 flex items-center justify-center rounded-full bg-[#B42318] text-white" x-text="unreadMessages"></span>
+      </span>
+      <span x-show="!collapsed" class="flex-1 text-left">Messages</span>
+      <span x-show="!collapsed && unreadMessages>0" class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-[#FEF3F2] text-[#B42318]" x-text="unreadMessages"></span>
+    </button>
+
+    <!-- Announcements -->
+    <button @click="view='announcements'" :title="collapsed ? 'Announcements' : undefined"
+            class="w-full flex items-center gap-3 py-2.5 text-[12px] font-semibold transition-colors relative"
+            :class="[view==='announcements' ? 'bg-[#EEF4FF] text-[#175CD3]' : 'text-[#344054] hover:bg-[#F9FAFB]', collapsed ? 'justify-center px-0' : 'px-4']">
+      <span x-show="view==='announcements' && !collapsed" class="absolute left-0 top-1 bottom-1 w-[3px] bg-[#1268F3] rounded-r-full"></span>
+      <span class="relative shrink-0">
+        <svg class="w-4 h-4"><use href="#icon-megaphone"/></svg>
+        <span x-show="unreadAnnouncements>0" class="absolute -top-1.5 -right-1.5 text-[8px] font-extrabold w-3.5 h-3.5 flex items-center justify-center rounded-full bg-[#B42318] text-white" x-text="unreadAnnouncements"></span>
+      </span>
+      <span x-show="!collapsed" class="flex-1 text-left">Announcements</span>
+      <span x-show="!collapsed && unreadAnnouncements>0" class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-[#FEF3F2] text-[#B42318]" x-text="unreadAnnouncements"></span>
+    </button>
+
+    <?php if (($user['role'] ?? '') !== 'Client'): ?>
+    <!-- Leave -->
+    <button @click="view='leave'" :title="collapsed ? 'Leave' : undefined"
+            class="w-full flex items-center gap-3 py-2.5 text-[12px] font-semibold transition-colors relative"
+            :class="[view==='leave' ? 'bg-[#EEF4FF] text-[#175CD3]' : 'text-[#344054] hover:bg-[#F9FAFB]', collapsed ? 'justify-center px-0' : 'px-4']">
+      <span x-show="view==='leave' && !collapsed" class="absolute left-0 top-1 bottom-1 w-[3px] bg-[#1268F3] rounded-r-full"></span>
+      <span class="relative shrink-0">
+        <svg class="w-4 h-4"><use href="#icon-calendar"/></svg>
+        <?php if (is_admin()): ?>
+        <span x-show="pendingLeaves>0" class="absolute -top-1.5 -right-1.5 text-[8px] font-extrabold w-3.5 h-3.5 flex items-center justify-center rounded-full bg-[#B54708] text-white" x-text="pendingLeaves"></span>
+        <?php endif; ?>
+      </span>
+      <span x-show="!collapsed" class="flex-1 text-left">Leave</span>
+      <?php if (is_admin()): ?>
+      <span x-show="!collapsed && pendingLeaves>0" class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-[#FFFAEB] text-[#B54708]" x-text="pendingLeaves"></span>
+      <?php endif; ?>
+    </button>
+    <?php endif; ?>
+
     <!-- Approvals (admin only) -->
     <?php if (is_admin()): ?>
     <button @click="view='approvals'" :title="collapsed ? 'Approvals' : undefined"
@@ -248,7 +293,10 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
       <button x-show="view==='reminders'" @click="rmAddOpen=true" class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors flex items-center gap-1.5">
         <svg class="w-3 h-3"><use href="#icon-plus"/></svg> Add Follow-up
       </button>
-      <button x-show="view!=='reminders'" @click="addInquiryOpen=true" class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors flex items-center gap-1.5">
+      <button x-show="view==='leave' && !isAdmin" @click="openLeaveForm()" class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors flex items-center gap-1.5">
+        <svg class="w-3 h-3"><use href="#icon-plus"/></svg> Request Leave
+      </button>
+      <button x-show="view!=='reminders' && view!=='leave'" @click="addInquiryOpen=true" class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors flex items-center gap-1.5">
         <svg class="w-3 h-3"><use href="#icon-plus"/></svg> Add Inquiry
       </button>
       <button @click="notifsOpen=!notifsOpen; if(notifsOpen) markNotifsRead()" class="relative text-[#667085] hover:text-[#172B3A] transition-colors p-1.5">
@@ -283,8 +331,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
       <?php endif; ?>
 
       <!-- Today's Follow-ups widget -->
-      <template x-if="todayFollowUps.length > 0">
-        <div class="bg-white rounded-[10px] border border-[#E4E7EC] mb-4 overflow-hidden" style="box-shadow:0 1px 4px rgba(7,29,43,0.04)">
+      <div x-show="todayFollowUps.length > 0" x-cloak class="bg-white rounded-[10px] border border-[#E4E7EC] mb-4 overflow-hidden" style="box-shadow:0 1px 4px rgba(7,29,43,0.04)">
           <div class="px-4 py-3 border-b border-[#E4E7EC] flex items-center justify-between">
             <div class="flex items-center gap-2">
               <svg class="w-4 h-4 text-[#B42318]"><use href="#icon-bell"/></svg>
@@ -310,26 +357,24 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                   <div class="text-[10px] text-[#667085] mt-0.5" x-text="fu.created_by===currentUser ? 'Self-assigned' : 'Assigned by: '+fu.created_by"></div>
                 </div>
                 <div class="flex items-center gap-1.5 shrink-0">
-                  <button @click="completeFuDashboard(fu)" class="text-[10px] font-bold px-2.5 py-1.5 rounded-[7px] bg-[#ECFDF3] text-[#16803C] hover:bg-[#16803C] hover:text-white transition-colors">✓ Done</button>
-                  <button @click="openFuInquiry(fu)" class="text-[10px] font-bold px-2.5 py-1.5 rounded-[7px] bg-[#EEF4FF] text-[#175CD3] hover:bg-[#1268F3] hover:text-white transition-colors">Open</button>
+                  <button @click="completeFuDashboard(fu)" class="inline-flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#ECFDF3] text-[#16803C] hover:bg-[#16803C] hover:text-white transition-colors">
+                    <svg class="w-3 h-3"><use href="#icon-check-circle"/></svg> Done
+                  </button>
+                  <button @click="openFuInquiry(fu)" class="inline-flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#EEF4FF] text-[#175CD3] hover:bg-[#1268F3] hover:text-white transition-colors">
+                    Open
+                  </button>
                 </div>
               </div>
             </template>
           </div>
-        </div>
-      </template>
+      </div>
 
-      <!-- Stats bar (6 tiles clickable filters) -->
-      <div class="grid grid-cols-3 md:grid-cols-6 gap-3 mb-4">
+      <!-- Stats bar (5 tiles clickable filters) -->
+      <div class="grid grid-cols-5 gap-3 mb-4">
         <button type="button" @click="statFilter=''" class="bg-white rounded-[10px] border border-[#E4E7EC] px-4 py-3 text-left w-full cursor-pointer"
           :style="statFilter==='' ? 'box-shadow:0 0 0 2px #667085' : 'box-shadow:0 1px 4px rgba(7,29,43,0.04)'">
           <div class="flex items-center gap-1.5 mb-1"><div class="w-1.5 h-1.5 rounded-full bg-[#667085]"></div><div class="text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085]">Total Inquiries</div></div>
           <div class="text-[28px] font-bold leading-none text-[#172B3A]" x-text="stats.total"></div>
-        </button>
-        <button type="button" @click="statFilter = statFilter==='received' ? '' : 'received'" class="bg-white rounded-[10px] border border-[#E4E7EC] px-4 py-3 text-left w-full cursor-pointer"
-          :style="statFilter==='received' ? 'box-shadow:0 0 0 2px #175CD3' : 'box-shadow:0 1px 4px rgba(7,29,43,0.04)'">
-          <div class="flex items-center gap-1.5 mb-1"><div class="w-1.5 h-1.5 rounded-full bg-[#175CD3]"></div><div class="text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085]">Inquiry Received</div></div>
-          <div class="text-[28px] font-bold leading-none text-[#172B3A]" x-text="stats.received"></div>
         </button>
         <button type="button" @click="statFilter = statFilter==='inProgress' ? '' : 'inProgress'" class="bg-white rounded-[10px] border border-[#E4E7EC] px-4 py-3 text-left w-full cursor-pointer"
           :style="statFilter==='inProgress' ? 'box-shadow:0 0 0 2px #1268F3' : 'box-shadow:0 1px 4px rgba(7,29,43,0.04)'">
@@ -356,6 +401,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
           <input x-model="search" placeholder="Search by ID, client, company…" class="flex-1 text-[12px] text-[#172B3A] placeholder:text-[#667085] bg-transparent focus:outline-none" />
           <button x-show="search" @click="search=''" class="text-[#667085]">✕</button>
         </div>
+        <button @click="dateFilter = dateFilter==='today' ? '' : 'today'" class="text-[11px] font-bold px-3 rounded-[8px] transition-colors shrink-0" :class="dateFilter==='today'?'bg-[#1268F3] text-white':'bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC]'" style="height:38px">Today</button>
         <!-- Employee filter (admin only) -->
         <?php if (is_admin()): ?>
         <div class="relative">
@@ -380,11 +426,6 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
         <div class="w-px h-5 bg-[#E4E7EC]"></div>
         <button @click="typeFilter = typeFilter==='Client Project' ? '' : 'Client Project'" class="text-[11px] font-bold px-3 rounded-[8px] transition-colors" :class="typeFilter==='Client Project'?'bg-[#1268F3] text-white':'bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC]'" style="height:34px">Client Project</button>
         <button @click="typeFilter = typeFilter==='Internal Usage' ? '' : 'Internal Usage'" class="text-[11px] font-bold px-3 rounded-[8px] transition-colors" :class="typeFilter==='Internal Usage'?'bg-[#1268F3] text-white':'bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC]'" style="height:34px">Internal Usage</button>
-        <?php if (is_admin()): ?>
-        <div class="w-px h-5 bg-[#E4E7EC]"></div>
-        <button @click="myOnly=false" class="text-[11px] font-bold px-3 rounded-[8px] transition-colors" :class="!myOnly?'bg-[#1268F3] text-white':'bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC]'" style="height:34px">View All</button>
-        <button @click="myOnly=true"  class="text-[11px] font-bold px-3 rounded-[8px] transition-colors" :class="myOnly ?'bg-[#1268F3] text-white':'bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC]'" style="height:34px">My Inquiries</button>
-        <?php endif; ?>
       </div>
 
       <!-- Active filter chips -->
@@ -443,7 +484,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                   <div class="inq-cell" style="width:40px;align-items:center;justify-content:center;flex-direction:row">
                     <div class="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-extrabold"
                          :class="inq.overdue ? 'bg-[#EEF4FF] text-[#B42318]' : 'bg-[#EEF4FF] text-[#175CD3]'"
-                         x-text="_inqPage*10+i+1"></div>
+                         x-text="_inqPage*15+i+1"></div>
                   </div>
                   <!-- Inquiry ID -->
                   <div class="inq-cell" style="width:100px">
@@ -526,7 +567,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                 <div x-show="inq._open && !isClient" x-cloak class="px-4 pt-3 pb-4"
                      :style="{ background: darkMode ? '#16223A' : '#EFF6FF' }">
 
-                  <!-- ── Inquiry Info panel: attachments, admin remark, follow-ups — grouped so it reads as one zone ── -->
+                  <!-- ── Inquiry Info panel: attachments, admin remark, follow-ups  grouped so it reads as one zone ── -->
                   <div class="bg-white border border-[#E4E7EC] rounded-[10px] p-3 mb-4">
 
                   <!-- Action bar: attachments left, buttons right -->
@@ -559,7 +600,22 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                       </div>
                     </div>
                     <!-- Buttons -->
-                    <div class="flex items-center gap-2 shrink-0">
+                    <div class="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                      <button x-show="isAdmin"
+                        @click="adminRemarkFor=inq" class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#FFFAEB] text-[#B54708] hover:bg-[#B42318] hover:text-white transition-colors flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5"><use href="#icon-shield-check"/></svg> Admin Remark
+                        <span x-show="inq.admin_remark" class="w-1.5 h-1.5 rounded-full bg-[#B54708]"></span>
+                      </button>
+                      <button x-show="!viewingEmployee && (isAdmin || inq.created_by===currentUser || inq.steps.some(s=>s.assigned_to===currentUser||s.assigned_by===currentUser))"
+                        @click="teamRemarkFor=inq" class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#EEF4FF] text-[#175CD3] hover:bg-[#1268F3] hover:text-white transition-colors flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5"><use href="#icon-message-circle"/></svg> Remark
+                        <span x-show="inq.team_remark" class="w-1.5 h-1.5 rounded-full bg-[#1268F3]"></span>
+                      </button>
+                      <button x-show="!viewingEmployee && !isClient"
+                        @click.stop="openFuForm(inq)" class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#EEF4FF] text-[#175CD3] hover:bg-[#1268F3] hover:text-white transition-colors flex items-center gap-1">
+                        <svg class="w-3.5 h-3.5"><use href="#icon-bell"/></svg> Follow Up
+                        <span x-show="(followUps[inq.id]||[]).some(f=>!f.completed)" class="w-1.5 h-1.5 rounded-full bg-[#1268F3]"></span>
+                      </button>
                       <button x-show="!viewingEmployee && (isAdmin || inq.created_by===currentUser) && !isInquiryClosed(inq)"
                         @click="openCompleteInquiry(inq)" class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#ECFDF3] text-[#16803C] hover:bg-[#16803C] hover:text-white transition-colors flex items-center gap-1">
                         <svg class="w-3.5 h-3.5"><use href="#icon-check-circle"/></svg> Complete Inquiry
@@ -575,160 +631,42 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                     </div>
                   </div>
 
-                  <!-- ── Admin Remark ── -->
-                  <div class="mb-3">
-                    <!-- Admin: editable -->
-                    <template x-if="isAdmin">
-                      <div class="bg-[#FFFAEB] border border-[#FDE68A] rounded-[10px] px-3.5 py-3">
-                        <div class="flex items-center gap-2 mb-2">
-                          <svg class="w-3.5 h-3.5 text-[#B45309] shrink-0"><use href="#icon-shield-check"/></svg>
-                          <span class="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#B45309]">Admin Remark</span>
-                          <span class="text-[9px] text-[#B45309] opacity-60"> visible to all members of this inquiry</span>
-                        </div>
-                        <textarea x-model="inq._adminRemark"
-                                  rows="2"
-                                  placeholder="Add a remark visible to everyone involved in this inquiry…"
-                                  class="w-full text-[12px] text-[#172B3A] bg-white border border-[#FDE68A] rounded-[7px] px-3 py-2 resize-none focus:outline-none focus:border-[#F59E0B] placeholder:text-[#D1D9E6]"
-                                  @input="autoSaveAdminRemark(inq)"
-                                  @keydown.ctrl.enter="saveAdminRemark(inq)"></textarea>
-                        <div x-show="inq._adminRemarkSaving" class="flex items-center gap-1.5 mt-1.5 text-[10px] text-[#B45309]">
-                          <svg class="w-3 h-3 spin"><use href="#icon-refresh-cw"/></svg> Saving…
-                        </div>
+                  <!-- Non-admin: read-only remark, shown only if one exists -->
+                  <div x-show="!isAdmin && inq.admin_remark" class="mb-3">
+                    <div class="bg-[#FFFAEB] border border-[#FDE68A] rounded-[10px] px-3.5 py-3">
+                      <div class="flex items-center gap-2 mb-1.5">
+                        <svg class="w-3.5 h-3.5 text-[#B45309] shrink-0"><use href="#icon-shield-check"/></svg>
+                        <span class="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#B45309]">Admin Remark</span>
                       </div>
-                    </template>
-                    <!-- Non-admin: read-only, shown only if a remark exists -->
-                    <template x-if="!isAdmin && inq.admin_remark">
-                      <div class="bg-[#FFFAEB] border border-[#FDE68A] rounded-[10px] px-3.5 py-3">
-                        <div class="flex items-center gap-2 mb-1.5">
-                          <svg class="w-3.5 h-3.5 text-[#B45309] shrink-0"><use href="#icon-shield-check"/></svg>
-                          <span class="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#B45309]">Admin Remark</span>
-                        </div>
-                        <p class="text-[12px] text-[#172B3A] leading-relaxed whitespace-pre-line" x-text="inq.admin_remark"></p>
-                      </div>
-                    </template>
+                      <p class="text-[12px] text-[#172B3A] leading-relaxed whitespace-pre-line" x-text="inq.admin_remark"></p>
+                    </div>
                   </div>
 
-                  <!-- ── Follow-up Status Strip ─────────────────────────────── -->
-                  <div x-show="!viewingEmployee" class="mb-3"
-                       x-data="{
-                         get fus()     { return Array.isArray(followUps[inq.id]) ? followUps[inq.id] : []; },
-                         get pending() { return this.fus.filter(f=>!f.completed).length; },
-                         get overdue() { const t=new Date().toLocaleDateString('en-CA'); return this.fus.filter(f=>!f.completed&&f.follow_up_date<t).length; },
-                         get loaded()  { return Array.isArray(followUps[inq.id]); }
-                       }">
-                    <div class="rounded-[10px] border overflow-hidden transition-colors"
-                         :class="loaded && overdue ? 'bg-[#FFF8F8] border-[#FECDCA]' : loaded && pending ? 'bg-[#F5F9FF] border-[#C7D7FA]' : 'bg-[#F9FAFB] border-[#E4E7EC]'">
-
-                      <!-- Status bar -->
-                      <div class="flex items-center gap-2.5 px-3 py-2.5">
-                        <span x-show="loaded && pending > 0"
-                              class="inline-flex items-center gap-1 text-[10px] font-extrabold px-2 py-[2px] rounded-full"
-                              :class="overdue ? 'bg-[#FEF3F2] text-[#B42318]' : 'bg-[#EEF4FF] text-[#175CD3]'">
-                          <svg class="w-3 h-3"><use href="#icon-bell"/></svg>
-                          <span x-text="pending+' pending'"></span>
-                        </span>
-                        <div class="flex-1 min-w-0"></div>
-                        <button @click.stop="openFuForm(inq)"
-                                class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors flex items-center gap-1 shrink-0">
-                          <svg class="w-3.5 h-3.5"><use href="#icon-bell"/></svg> Follow Up
-                        </button>
-                      </div>
-
-                      <!-- Pending follow-ups list -->
-                      <template x-if="loaded && pending > 0">
-                        <div class="border-t border-[#E4E7EC] divide-y divide-[#F2F4F7]">
-                          <template x-for="fu in fus.filter(f=>!f.completed)" :key="fu.id">
-                            <div class="flex items-center gap-2.5 px-3 py-2 bg-white">
-                              <div class="flex-1 min-w-0">
-                                <div class="text-[11px] font-semibold text-[#344054] truncate" x-text="fu.note"></div>
-                                <div class="text-[10px] text-[#98A2B3] mt-0.5"
-                                     x-text="fu.follow_up_date+(fu.follow_up_time?' · '+fu.follow_up_time:'')+' · '+fu.assigned_to"></div>
-                              </div>
-                              <button x-show="fu.assigned_to===currentUser || fu.created_by===currentUser"
-                                      @click.stop="completeFollowUp(fu, inq)"
-                                      class="shrink-0 text-[10px] font-bold px-2.5 py-1 rounded-[6px] bg-[#ECFDF3] text-[#16803C] hover:bg-[#16803C] hover:text-white transition-colors">
-                                ✓ Done
-                              </button>
-                            </div>
-                          </template>
+                  <!-- Team remark, attributed to whoever wrote it, shown only if one exists -->
+                  <div x-show="inq.team_remark" class="mb-3">
+                    <div class="bg-[#EEF4FF] border border-[#DBEAFE] rounded-[10px] px-3.5 py-3">
+                      <div class="flex items-center justify-between gap-2 mb-1.5">
+                        <div class="flex items-center gap-2 min-w-0">
+                          <svg class="w-3.5 h-3.5 text-[#175CD3] shrink-0"><use href="#icon-message-circle"/></svg>
+                          <span class="text-[10px] font-extrabold uppercase tracking-[0.08em] text-[#175CD3] truncate" x-text="'Remark by ' + inq.team_remark_by"></span>
                         </div>
-                      </template>
-
+                        <div x-show="!viewingEmployee && (isAdmin || inq.created_by===currentUser || inq.steps.some(s=>s.assigned_to===currentUser||s.assigned_by===currentUser))"
+                             class="flex items-center gap-1 shrink-0">
+                          <button @click="teamRemarkFor=inq" title="Edit remark" class="w-5 h-5 flex items-center justify-center rounded text-[#175CD3] hover:bg-[#DBEAFE] transition-colors">
+                            <svg class="w-3 h-3"><use href="#icon-edit-2"/></svg>
+                          </button>
+                          <button @click="deleteTeamRemark(inq)" title="Delete remark" class="w-5 h-5 flex items-center justify-center rounded text-[#B42318] hover:bg-[#FEF3F2] transition-colors">
+                            <svg class="w-3 h-3"><use href="#icon-trash-2"/></svg>
+                          </button>
+                        </div>
+                      </div>
+                      <p class="text-[12px] text-[#172B3A] leading-relaxed whitespace-pre-line" x-text="inq.team_remark"></p>
                     </div>
-                  </div><!-- /follow-up strip -->
+                  </div>
 
                   </div><!-- /Inquiry Info panel -->
 
-                  <!-- Follow-up popup modal -->
-                  <div x-show="fuOpenFor===inq.id" x-cloak
-                         @click.self="fuOpenFor=null"
-                         class="fixed inset-0 z-50 flex items-center justify-center p-4"
-                         style="background:rgba(7,29,43,0.60);backdrop-filter:blur(4px)">
-                      <div class="bg-white rounded-[14px] w-full max-w-[700px] flex flex-col" style="box-shadow:0 20px 60px rgba(7,29,43,0.18);max-height:90vh">
-
-                        <!-- Header -->
-                        <div class="flex items-center justify-between px-5 py-4 rounded-t-[14px] shrink-0" style="background:#071D2B">
-                          <div>
-                            <h2 class="text-[16px] font-bold text-white leading-tight">Schedule Follow-up</h2>
-                            <p class="text-[11px] mt-0.5" style="color:rgba(255,255,255,0.55)" x-text="inq.id + ' · ' + inq.client"></p>
-                          </div>
-                          <button @click="fuOpenFor=null" class="hover:text-white transition-colors ml-4 text-xl" style="color:rgba(255,255,255,0.5)">✕</button>
-                        </div>
-
-                        <!-- Fields -->
-                        <div class="overflow-y-auto flex-1 p-5 space-y-4">
-
-                          <!-- Note -->
-                          <div>
-                            <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Note <span class="text-[#B42318]">*</span></label>
-                            <input x-model="fuForm.note" type="text"
-                                   placeholder="e.g. Call client for proposal feedback"
-                                   class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white">
-                          </div>
-
-                          <!-- Date + Time -->
-                          <div class="grid grid-cols-2 gap-3">
-                            <div>
-                              <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Date <span class="text-[#B42318]">*</span></label>
-                              <input x-model="fuForm.date" type="date"
-                                     class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white">
-                            </div>
-                            <div>
-                              <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Time <span class="font-normal normal-case text-[#B8CCED]">(optional)</span></label>
-                              <input x-model="fuForm.time" type="time"
-                                     class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white">
-                            </div>
-                          </div>
-
-                          <!-- Assigned To -->
-                          <div>
-                            <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Assigned To</label>
-                            <div class="relative">
-                              <select x-model="fuForm.assignedTo"
-                                      class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 bg-white focus:outline-none focus:border-[#1268F3] cursor-pointer">
-                                <option value="">Me (<?= htmlspecialchars($user['name']) ?>)</option>
-                                <template x-for="a in accounts.filter(a=>a.status==='approved')" :key="a.id">
-                                  <option :value="a.name" x-text="a.name"></option>
-                                </template>
-                              </select>
-                              <svg class="w-3 h-3 absolute right-2.5 top-1/2 -translate-y-1/2 text-[#667085] pointer-events-none"><use href="#icon-chevron-down"/></svg>
-                            </div>
-                          </div>
-
-                        </div>
-
-                        <!-- Footer -->
-                        <div class="border-t border-[#E4E7EC] px-5 py-3.5 flex justify-end gap-2 shrink-0 rounded-b-[14px] bg-white">
-                          <button @click="fuOpenFor=null" class="text-[12px] font-bold px-4 py-2 rounded-[8px] bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC] transition-colors">Cancel</button>
-                          <button @click="addFollowUp(inq)" class="text-[12px] font-bold px-4 py-2 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors flex items-center gap-1.5">
-                            Schedule <svg class="w-3 h-3"><use href="#icon-arrow-right"/></svg>
-                          </button>
-                        </div>
-
-                      </div>
-                  </div><!-- /follow-up modal -->
-
-                  <!-- ── Workflow Steps panel — separate zone from the info panel above ── -->
+                  <!-- ── Workflow Steps panel  separate zone from the info panel above ── -->
                   <div class="bg-white border border-[#E4E7EC] rounded-[10px] p-3">
 
                   <!-- Label + all-done badge -->
@@ -812,8 +750,10 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                           <div class="flex items-center gap-1 min-h-[14px]">
                             <span x-show="!viewingEmployee && step.assigned_to===currentUser && !['Done','Completed'].includes(step.status)"
                                   class="text-[8px] font-extrabold px-1.5 py-0.5 rounded-[4px] bg-[#ECFDF3] text-[#16803C]">✎ Your update <span class="text-[#B42318]">*</span></span>
-                            <span x-show="viewingEmployee || step.assigned_to!==currentUser || ['Done','Completed'].includes(step.status)"
-                                  class="text-[8px] text-[#B8CCED]" x-text="'by ' + step.assigned_to"></span>
+                            <span x-show="(viewingEmployee || step.assigned_to!==currentUser || ['Done','Completed'].includes(step.status)) && (step._remark||'').trim()"
+                                  class="text-[8px] font-bold text-[#344054]" x-text="'Remark by ' + step.assigned_to"></span>
+                            <span x-show="(viewingEmployee || step.assigned_to!==currentUser || ['Done','Completed'].includes(step.status)) && !(step._remark||'').trim()"
+                                  class="text-[8px] text-[#B8CCED]" x-text="'No remark yet from ' + step.assigned_to"></span>
                             <span x-show="step._remarkSaved" class="text-[8px] font-bold text-[#16803C] ml-1">✓ Saved</span>
                           </div>
                           <textarea rows="3" x-model="step._remark"
@@ -913,28 +853,30 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
           </div><!-- /excel-grid -->
 
           <!-- Pagination bar -->
-          <div x-show="filtered.length > 10"
+          <div x-show="filtered.length > 15"
                class="flex items-center justify-between gap-3 mt-4 px-1">
             <div class="text-[11px] text-[#667085]">
-              Showing <span class="font-semibold text-[#344054]" x-text="(_inqPage*10+1)+' – '+Math.min(_inqPage*10+10, filtered.length)"></span>
+              Showing <span class="font-semibold text-[#344054]" x-text="(_inqPage*15+1)+' – '+Math.min(_inqPage*15+15, filtered.length)"></span>
               of <span class="font-semibold text-[#344054]" x-text="filtered.length"></span> inquiries
             </div>
-            <div class="flex items-center gap-1.5">
+            <div class="flex items-center gap-2.5">
               <button @click="_inqPage--" :disabled="_inqPage===0"
                       class="flex items-center gap-1 text-[11px] font-semibold px-3 py-1.5 rounded-[8px] border transition-all"
                       :class="_inqPage===0 ? 'border-[#E4E7EC] text-[#C4CAD4] cursor-not-allowed' : 'border-[#E4E7EC] text-[#344054] hover:border-[#1268F3] hover:text-[#1268F3]'">
                 <svg class="w-3.5 h-3.5"><use href="#icon-chevron-left"/></svg>
                 Prev
               </button>
-              <template x-for="p in Math.ceil(filtered.length/10)" :key="p">
-                <button @click="_inqPage=p-1"
-                        class="w-7 h-7 flex items-center justify-center rounded-[6px] text-[11px] font-bold transition-all"
-                        :class="p-1===_inqPage ? 'bg-[#1268F3] text-white' : 'text-[#667085] hover:bg-[#EEF4FF] hover:text-[#175CD3]'"
-                        x-text="p"></button>
-              </template>
-              <button @click="_inqPage++" :disabled="_inqPage>=Math.ceil(filtered.length/10)-1"
+              <div class="flex items-center gap-1.5">
+                <template x-for="p in Math.ceil(filtered.length/15)" :key="p">
+                  <button @click="_inqPage=p-1"
+                          class="w-7 h-7 flex items-center justify-center rounded-[6px] text-[11px] font-bold transition-all"
+                          :class="p-1===_inqPage ? 'bg-[#1268F3] text-white' : 'text-[#667085] hover:bg-[#EEF4FF] hover:text-[#175CD3]'"
+                          x-text="p"></button>
+                </template>
+              </div>
+              <button @click="_inqPage++" :disabled="_inqPage>=Math.ceil(filtered.length/15)-1"
                       class="flex items-center gap-1 text-[11px] font-semibold px-3 py-1.5 rounded-[8px] border transition-all"
-                      :class="_inqPage>=Math.ceil(filtered.length/10)-1 ? 'border-[#E4E7EC] text-[#C4CAD4] cursor-not-allowed' : 'border-[#E4E7EC] text-[#344054] hover:border-[#1268F3] hover:text-[#1268F3]'">
+                      :class="_inqPage>=Math.ceil(filtered.length/15)-1 ? 'border-[#E4E7EC] text-[#C4CAD4] cursor-not-allowed' : 'border-[#E4E7EC] text-[#344054] hover:border-[#1268F3] hover:text-[#1268F3]'">
                 Next
                 <svg class="w-3.5 h-3.5"><use href="#icon-chevron-right"/></svg>
               </button>
@@ -947,11 +889,32 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
 
     <!-- ── MY TASKS VIEW ──────────────────────────────────────────────────── -->
     <div x-show="view==='tasks'" x-cloak>
+
+      <!-- Tabs: To Me / By Me -->
+      <div class="flex items-center gap-2 mb-4">
+        <button @click="taskViewFilter='to_me'"
+                class="flex items-center gap-1.5 text-[12px] font-bold px-3.5 py-2 rounded-[8px] border transition-colors"
+                :class="taskViewFilter==='to_me' ? 'bg-[#1268F3] border-[#1268F3] text-white' : 'bg-white border-[#E4E7EC] text-[#344054] hover:border-[#1268F3]'">
+          Assigned to Me
+          <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full"
+                :class="taskViewFilter==='to_me' ? 'bg-white/20 text-white' : 'bg-[#F2F4F7] text-[#667085]'"
+                x-text="tasksAssignedToMe.length"></span>
+        </button>
+        <button @click="taskViewFilter='by_me'"
+                class="flex items-center gap-1.5 text-[12px] font-bold px-3.5 py-2 rounded-[8px] border transition-colors"
+                :class="taskViewFilter==='by_me' ? 'bg-[#1268F3] border-[#1268F3] text-white' : 'bg-white border-[#E4E7EC] text-[#344054] hover:border-[#1268F3]'">
+          Assigned by Me
+          <span class="text-[10px] font-extrabold px-1.5 py-0.5 rounded-full"
+                :class="taskViewFilter==='by_me' ? 'bg-white/20 text-white' : 'bg-[#F2F4F7] text-[#667085]'"
+                x-text="tasksAssignedByMe.length"></span>
+        </button>
+      </div>
+
       <template x-if="myTasks.length===0">
         <div class="flex flex-col items-center justify-center bg-white border border-dashed border-[#E4E7EC] rounded-[12px] text-center" style="padding:60px 40px">
           <svg class="w-10 h-10 text-[#D1D9E6] mb-3"><use href="#icon-check-circle"/></svg>
-          <div class="text-[15px] font-bold text-[#344054] mb-1">No open tasks</div>
-          <div class="text-[13px] text-[#667085]">All steps are completed or none assigned yet.</div>
+          <div class="text-[15px] font-bold text-[#344054] mb-1" x-text="taskViewFilter==='to_me' ? 'No open tasks' : 'You haven\'t assigned anyone a task'"></div>
+          <div class="text-[13px] text-[#667085]" x-text="taskViewFilter==='to_me' ? 'All steps are completed or none assigned to you yet.' : 'Tasks you hand off to others will show up here until they\'re done.'"></div>
         </div>
       </template>
       <template x-if="myTasks.length>0">
@@ -998,6 +961,22 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
               <!-- Task instruction -->
               <div class="px-4 py-3">
                 <div class="text-[13px] text-[#344054] leading-[1.6] line-clamp-2" x-text="stripHtml(t.step.instruction)"></div>
+              </div>
+
+              <!-- Footer: who's involved + due date -->
+              <div class="px-4 py-2.5 border-t border-[#F2F4F7] bg-[#FAFBFC] flex items-center justify-between gap-3 flex-wrap">
+                <div class="flex items-center gap-1.5 text-[11px] text-[#667085]">
+                  <template x-if="taskViewFilter==='to_me'">
+                    <span>Assigned by <span class="font-bold text-[#344054]" x-text="t.step.assigned_by"></span></span>
+                  </template>
+                  <template x-if="taskViewFilter==='by_me'">
+                    <span>Assigned to <span class="font-bold text-[#344054]" x-text="t.step.assigned_to"></span></span>
+                  </template>
+                </div>
+                <div x-show="t.step.due && t.step.due!=='TBD'" class="flex items-center gap-1 text-[11px]" :class="t.step.overdue ? 'text-[#B42318] font-bold' : 'text-[#667085]'">
+                  <svg class="w-3 h-3"><use href="#icon-calendar"/></svg>
+                  <span x-text="'Due '+(t.step.due||'').split(' · ')[0]"></span>
+                </div>
               </div>
 
             </div>
@@ -1238,7 +1217,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
               </div>
             </div>
 
-            <!-- History — standalone toggle CTA -->
+            <!-- History  standalone toggle CTA -->
             <button @click="rmFilter = rmFilter==='done' ? 'all' : 'done'"
                     class="shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-[8px] text-[12px] font-semibold border transition-all"
                     :style="rmFilter==='done' ? 'background:#344054;border-color:#344054;color:#fff' : (darkMode ? 'background:#151B23;border-color:#2A323D;color:#93A0B4' : 'background:#fff;border-color:#E4E7EC;color:#667085')">
@@ -1294,7 +1273,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
 
                   <!-- Client -->
                   <td class="px-5 py-3.5">
-                    <div class="text-[12px] font-semibold text-[#172B3A] truncate max-w-[140px]" x-text="fu.client||'—'"></div>
+                    <div class="text-[12px] font-semibold text-[#172B3A] truncate max-w-[140px]" x-text="fu.client||''"></div>
                     <div class="text-[10px] text-[#98A2B3] truncate max-w-[140px]" x-text="fu.company"></div>
                   </td>
 
@@ -1318,12 +1297,12 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                     </div>
                   </td>
 
-                  <!-- Actions — only for the assignee -->
+                  <!-- Actions  only for the assignee -->
                   <td class="px-5 py-3.5 whitespace-nowrap">
                     <template x-if="!fu.completed && (fu.assigned_to===currentUser || fu.created_by===currentUser)">
                       <button @click="rmComplete(fu)"
-                              class="text-[11px] font-bold px-3 py-1.5 rounded-[6px] bg-[#ECFDF3] text-[#16803C] hover:bg-[#16803C] hover:text-white transition-colors opacity-0 group-hover:opacity-100">
-                        ✓ Done
+                              class="inline-flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#ECFDF3] text-[#16803C] hover:bg-[#16803C] hover:text-white transition-colors">
+                        <svg class="w-3 h-3"><use href="#icon-check-circle"/></svg> Done
                       </button>
                     </template>
                   </td>
@@ -1356,6 +1335,324 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
 
     </div><!-- /reminders -->
 
+    <!-- ── MESSAGES VIEW ──────────────────────────────────────────────────── -->
+    <div x-show="view==='messages'" x-cloak>
+      <div class="bg-white rounded-[12px] border border-[#E4E7EC] flex overflow-hidden" style="box-shadow:0 1px 4px rgba(7,29,43,0.04);height:calc(100vh - 130px)">
+        <!-- Contact list -->
+        <div class="w-[220px] border-r border-[#E4E7EC] overflow-y-auto shrink-0">
+          <div class="px-3.5 py-3 border-b border-[#E4E7EC] space-y-2">
+            <span class="text-[14px] font-bold text-[#172B3A]">Conversations</span>
+            <div class="flex items-center gap-1.5 border border-[#E4E7EC] rounded-[8px] px-2.5 focus-within:border-[#1268F3] transition-colors" style="height:34px">
+              <svg class="w-3 h-3 text-[#667085] shrink-0"><use href="#icon-search"/></svg>
+              <input type="text" x-model="msgSearch" placeholder="Search members…"
+                     class="flex-1 min-w-0 text-[11px] text-[#172B3A] placeholder:text-[#667085] bg-transparent focus:outline-none">
+              <button x-show="msgSearch" @click="msgSearch=''" class="text-[#667085] hover:text-[#172B3A] shrink-0 text-[11px]">✕</button>
+            </div>
+          </div>
+          <template x-if="messagingContacts.length===0">
+            <div class="flex flex-col items-center justify-center p-8 text-center">
+              <svg class="w-9 h-9 text-[#D1D9E6] mb-3"><use href="#icon-message-circle"/></svg>
+              <div class="text-[12px] text-[#667085]">No contacts</div>
+            </div>
+          </template>
+          <template x-if="messagingContacts.length>0 && filteredContacts.length===0">
+            <div class="flex flex-col items-center justify-center p-8 text-center">
+              <svg class="w-9 h-9 text-[#D1D9E6] mb-3"><use href="#icon-search"/></svg>
+              <div class="text-[12px] text-[#667085]">No members match <span class="font-bold" x-text="'“'+msgSearch+'”'"></span></div>
+            </div>
+          </template>
+          <div class="divide-y divide-[#E4E7EC]">
+            <template x-for="c in filteredContacts" :key="c.id">
+              <div class="flex items-center gap-2.5 px-3.5 py-3 cursor-pointer transition-colors"
+                   :class="activeContact && activeContact.id===c.id ? 'bg-[#EEF4FF]' : 'hover:bg-[#F2F4F7]'"
+                   @click="selectContact(c)">
+                <div class="relative shrink-0">
+                  <div class="w-7 h-7 rounded-full bg-[#EEF4FF] flex items-center justify-center text-[9px] font-extrabold text-[#175CD3]" x-text="c._initials"></div>
+                  <span :title="c.online ? 'Online' : 'Offline'"
+                        :style="'position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:999px;border:2px solid #fff;background:'+(c.online?'#25D366':'#D0D5DD')"></span>
+                </div>
+                <div class="flex-1 min-w-0">
+                  <div class="flex items-center justify-between gap-1">
+                    <div class="text-[12px] font-bold text-[#172B3A] truncate" x-text="c.name"></div>
+                    <div x-show="c._lastTime" class="text-[9px] text-[#98A2B3] shrink-0" x-text="c._lastTime"></div>
+                  </div>
+                  <div class="text-[10px] text-[#667085] truncate" x-text="c.last_body || c.role"></div>
+                </div>
+                <span x-show="c.unread>0" class="text-[8px] font-extrabold w-3.5 h-3.5 flex items-center justify-center rounded-full bg-[#1268F3] text-white shrink-0" x-text="c.unread"></span>
+              </div>
+            </template>
+          </div>
+        </div>
+        <!-- Thread -->
+        <div class="flex-1 flex flex-col min-w-0">
+          <template x-if="!activeContact">
+            <div class="flex-1 flex flex-col items-center justify-center p-8 text-center">
+              <svg class="w-9 h-9 text-[#D1D9E6] mb-3"><use href="#icon-message-circle"/></svg>
+              <div class="text-[14px] font-bold text-[#344054] mb-1">Select a conversation</div>
+              <div class="text-[12px] text-[#667085]">Pick someone from the list to start texting.</div>
+            </div>
+          </template>
+          <template x-if="activeContact">
+            <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
+              <div class="flex items-center justify-between px-5 py-3.5 border-b border-[#E4E7EC] shrink-0">
+                <div class="flex items-center gap-2.5 min-w-0">
+                  <div class="relative shrink-0">
+                    <div class="w-8 h-8 rounded-full bg-[#EEF4FF] flex items-center justify-center text-[10px] font-extrabold text-[#175CD3]"
+                         x-text="activeContact.name.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()"></div>
+                    <span :style="'position:absolute;top:-3px;right:-3px;width:10px;height:10px;border-radius:999px;border:2px solid #fff;background:'+(isOnline(activeContact.id)?'#25D366':'#D0D5DD')"></span>
+                  </div>
+                  <div class="min-w-0">
+                    <div class="text-[14px] font-bold text-[#172B3A] truncate" x-text="activeContact.name"></div>
+                    <div class="text-[11px] flex items-center gap-1.5">
+                      <span class="text-[#667085]" x-text="activeContact.role"></span>
+                      <span x-show="isOnline(activeContact.id)" class="flex items-center gap-1 font-semibold" style="color:#25D366">
+                        <span class="w-1.5 h-1.5 rounded-full" style="background:#25D366"></span> Online
+                      </span>
+                      <span x-show="!isOnline(activeContact.id)" class="text-[#98A2B3]" x-text="lastSeenLabel(activeContact.id)"></span>
+                    </div>
+                  </div>
+                </div>
+                <button @click="refreshThread()" class="text-[#667085] hover:text-[#172B3A] transition-colors p-1" title="Refresh">
+                  <svg class="w-3.5 h-3.5"><use href="#icon-refresh-cw"/></svg>
+                </button>
+              </div>
+              <div class="flex-1 overflow-y-auto p-4 flex flex-col space-y-2" x-ref="threadScroll">
+                <template x-if="!threadLoading && thread.length===0">
+                  <div class="text-[12px] text-[#667085] text-center">No messages yet  say hello.</div>
+                </template>
+                <template x-for="m in thread" :key="m.id">
+                  <div class="flex flex-col" :class="m.sender_id===currentUserId ? 'self-end' : 'self-start'">
+                    <div class="max-w-[320px] rounded-[12px] px-3.5 py-2.5 text-[12px] space-y-1.5"
+                         :class="m.sender_id===currentUserId ? 'bg-[#1268F3] text-white' : 'bg-[#F2F4F7] text-[#172B3A]'">
+                      <a x-show="m.attachment" :href="'api/serve.php?msg_id='+m.id+'&file='+encodeURIComponent(m.attachment)" target="_blank"
+                         class="flex items-center gap-1.5 rounded-[8px] px-2 py-1.5 transition-colors"
+                         :class="m.sender_id===currentUserId ? 'bg-white/15 hover:bg-white/25' : 'bg-white hover:bg-[#EEF4FF] border border-[#E4E7EC]'">
+                        <svg class="w-3 h-3 shrink-0"><use href="#icon-paperclip"/></svg>
+                        <span class="truncate underline decoration-dotted" x-text="m.attachment"></span>
+                      </a>
+                      <div x-show="m.body" x-text="m.body"></div>
+                    </div>
+                    <div class="text-[10px] text-[#B8CCED] mt-1" x-text="m._time"></div>
+                  </div>
+                </template>
+              </div>
+              <div class="border-t border-[#E4E7EC] p-3 flex items-center gap-2 shrink-0">
+                <input type="file" x-ref="chatFile" class="sr-only"
+                       accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.jpg,.jpeg,.png,.gif,.zip,.csv,.txt"
+                       @change="sendChatAttachment($event)">
+                <button @click="$refs.chatFile.click()" :disabled="_sendingAttachment"
+                        class="text-[#667085] hover:text-[#1268F3] transition-colors p-2 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed" title="Attach a file">
+                  <svg class="w-4 h-4" x-show="!_sendingAttachment"><use href="#icon-paperclip"/></svg>
+                  <svg x-show="_sendingAttachment" class="w-4 h-4 animate-spin"><use href="#icon-refresh-cw"/></svg>
+                </button>
+                <input type="text" x-model="messageText" @keydown.enter="sendMessage()" placeholder="Type a message…"
+                       class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white">
+                <button @click="sendMessage()" :disabled="!messageText.trim()"
+                        class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed shrink-0">
+                  <svg class="w-3 h-3"><use href="#icon-send"/></svg> Send
+                </button>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div><!-- /messages -->
+
+    <!-- ── ANNOUNCEMENTS VIEW ─────────────────────────────────────────────── -->
+    <div x-show="view==='announcements'" x-cloak class="space-y-4">
+
+      <!-- Composer — Admin / Master Admin only -->
+      <div x-show="isAdmin" class="bg-white rounded-[12px] border border-[#E4E7EC] p-4" style="box-shadow:0 1px 4px rgba(7,29,43,0.04)">
+        <textarea x-model="announcementText" rows="3" placeholder="Share an update with the whole team…"
+                  class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white resize-none"></textarea>
+        <div class="flex justify-end mt-2">
+          <button @click="postAnnouncement()" :disabled="!announcementText.trim() || _postingAnnouncement"
+                  class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed">
+            <svg class="w-3 h-3"><use href="#icon-megaphone"/></svg>
+            <span x-text="_postingAnnouncement ? 'Posting…' : 'Post Announcement'"></span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Feed -->
+      <template x-if="announcements.length===0">
+        <div class="bg-white rounded-[12px] border border-[#E4E7EC] flex flex-col items-center justify-center p-8 text-center" style="box-shadow:0 1px 4px rgba(7,29,43,0.04)">
+          <svg class="w-9 h-9 text-[#D1D9E6] mb-3"><use href="#icon-megaphone"/></svg>
+          <div class="text-[14px] font-bold text-[#344054] mb-1">No announcements yet</div>
+          <div class="text-[12px] text-[#667085]">Team updates will show up here.</div>
+        </div>
+      </template>
+
+      <div class="space-y-3.5">
+        <template x-for="a in announcements" :key="a.id">
+          <div class="bg-white rounded-[12px] border border-[#E4E7EC] p-4" style="box-shadow:0 1px 4px rgba(7,29,43,0.04)">
+            <div class="flex items-center gap-2.5 mb-2">
+              <div class="w-7 h-7 rounded-full bg-[#EEF4FF] flex items-center justify-center text-[9px] font-extrabold text-[#175CD3] shrink-0" x-text="a._initials"></div>
+              <div class="flex-1 min-w-0">
+                <div class="text-[12px] font-bold text-[#172B3A]" x-text="a.created_by"></div>
+                <div class="text-[10px] text-[#98A2B3]" x-text="a._time"></div>
+              </div>
+            </div>
+            <div class="text-[13px] text-[#344054] leading-[1.55]" style="white-space:pre-line" x-text="a.body"></div>
+          </div>
+        </template>
+      </div>
+
+    </div><!-- /announcements -->
+
+    <!-- ── LEAVE VIEW ─────────────────────────────────────────────────────── -->
+    <div x-show="view==='leave'" x-cloak class="space-y-4">
+
+      <div x-show="!isAdmin" class="bg-white rounded-[12px] border border-[#E4E7EC]" style="box-shadow:0 1px 4px rgba(7,29,43,0.04)">
+        <div class="px-5 py-4 border-b border-[#E4E7EC]">
+          <div class="text-[14px] font-bold text-[#172B3A]">Request Leave</div>
+          <div class="text-[12px] text-[#667085] mt-0.5">Admin will confirm the request before it is counted as leave.</div>
+        </div>
+        <div class="p-5 space-y-4">
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Leave type <span class="text-[#B42318]">*</span></label>
+            <select x-model="leaveForm.leaveType" @change="if(leaveForm.leaveType==='Half Day') leaveForm.endDate=leaveForm.startDate"
+                    class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 bg-white focus:outline-none focus:border-[#1268F3] cursor-pointer">
+              <template x-for="t in leaveTypes" :key="t">
+                <option :value="t" x-text="t"></option>
+              </template>
+            </select>
+          </div>
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">From <span class="text-[#B42318]">*</span></label>
+              <input x-ref="leaveStart" x-model="leaveForm.startDate" type="date" :min="new Date().toLocaleDateString('en-CA')"
+                     @change="if(leaveForm.leaveType==='Half Day') leaveForm.endDate=leaveForm.startDate"
+                     class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white">
+            </div>
+            <div x-show="leaveForm.leaveType!=='Half Day'">
+              <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">To <span class="text-[#B42318]">*</span></label>
+              <input x-model="leaveForm.endDate" type="date" :min="leaveForm.startDate || new Date().toLocaleDateString('en-CA')"
+                     class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white">
+            </div>
+          </div>
+          <div class="text-[12px] font-semibold text-[#175CD3]"
+               x-text="leaveDays ? (leaveForm.leaveType==='Half Day' ? 'Half day' : leaveDays+' calendar day'+(leaveDays===1?'':'s')) : 'Select dates to see duration'"></div>
+          <div>
+            <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Reason <span class="text-[#B42318]">*</span></label>
+            <textarea x-model="leaveForm.reason" rows="3" placeholder="e.g. Family function, medical appointment…"
+                      class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white resize-none"></textarea>
+          </div>
+          <p x-show="leaveErr" class="text-[12px] font-semibold text-[#B42318]" x-text="leaveErr"></p>
+          <div class="flex justify-end">
+            <button type="button" @click="submitLeave()" :disabled="_leaveSaving || !leaveForm.startDate || !leaveForm.endDate || !leaveForm.reason.trim()"
+                    class="text-[12px] font-bold px-4 py-2 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    x-text="_leaveSaving ? 'Submitting…' : 'Submit request'"></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="bg-white rounded-[12px] border border-[#E4E7EC]" style="box-shadow:0 1px 4px rgba(7,29,43,0.04)">
+        <div class="px-5 py-3.5 border-b border-[#E4E7EC] flex items-center justify-between gap-3 flex-wrap">
+          <div class="flex items-center gap-2.5">
+            <svg class="w-4 h-4 text-[#1268F3] shrink-0"><use href="#icon-calendar"/></svg>
+            <span class="text-[14px] font-bold text-[#172B3A]" x-text="isAdmin ? 'Team requests' : 'My requests'"></span>
+            <span class="text-[11px] font-semibold text-[#98A2B3] tabular-nums" x-text="filteredLeaves.length+' shown'"></span>
+          </div>
+          <div class="flex items-center gap-2 flex-wrap">
+            <select x-show="isAdmin" x-model="leaveUserFilter"
+                    class="text-[11px] font-semibold border border-[#E4E7EC] rounded-[8px] px-2.5 py-1.5 bg-white text-[#344054] cursor-pointer">
+              <option value="">All users</option>
+              <template x-for="n in leaveUserOptions" :key="n">
+                <option :value="n" x-text="n"></option>
+              </template>
+            </select>
+            <select x-model="leaveTypeFilter"
+                    class="text-[11px] font-semibold border border-[#E4E7EC] rounded-[8px] px-2.5 py-1.5 bg-white text-[#344054] cursor-pointer">
+              <option value="">All types</option>
+              <template x-for="t in leaveTypes" :key="t">
+                <option :value="t" x-text="t"></option>
+              </template>
+            </select>
+            <select x-model="leaveFilter"
+                    class="text-[11px] font-semibold border border-[#E4E7EC] rounded-[8px] px-2.5 py-1.5 bg-white text-[#344054] cursor-pointer">
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="approved">Approved</option>
+              <option value="rejected">Rejected</option>
+            </select>
+            <input x-show="isAdmin" type="month" x-model="leaveMonth"
+                   class="text-[11px] font-semibold border border-[#E4E7EC] rounded-[8px] px-2.5 py-1.5 bg-white text-[#344054]">
+            <button x-show="isAdmin" type="button" @click="exportLeaveCSV()"
+                    class="flex items-center gap-1.5 text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors whitespace-nowrap">
+              <svg class="w-3.5 h-3.5"><use href="#icon-download"/></svg> Download CSV
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto" x-show="filteredLeaves.length>0">
+          <table class="w-full min-w-[700px] border-collapse">
+            <thead>
+              <tr class="bg-[#F8FAFC]" style="border-bottom:2px solid #E4E7EC">
+                <th x-show="isAdmin" class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3] w-[140px]">Member</th>
+                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3] w-[130px]">Type</th>
+                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3] w-[180px]">Dates</th>
+                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3] w-[70px]">Days</th>
+                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]">Reason</th>
+                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3] w-[110px]">Status</th>
+                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3] w-[160px]">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="row in filteredLeaves" :key="row.id">
+                <tr class="group transition-colors hover:bg-[#F9FAFB]" style="border-bottom:1px solid #F2F4F7"
+                    :style="row.status==='pending'?(darkMode?'background:#241F14':'background:#FFFCF5'):''">
+                  <td x-show="isAdmin" class="px-5 py-3.5">
+                    <div class="text-[12px] font-semibold text-[#172B3A]" x-text="row.name"></div>
+                  </td>
+                  <td class="px-5 py-3.5">
+                    <div class="text-[12px] font-semibold text-[#344054]" x-text="row.leave_type || 'Casual Leave'"></div>
+                  </td>
+                  <td class="px-5 py-3.5 whitespace-nowrap">
+                    <div class="text-[12px] font-semibold text-[#344054]" x-text="leaveDateLabel(row)"></div>
+                    <div class="text-[10px] text-[#98A2B3] mt-0.5" x-text="'Requested '+leaveSubmittedLabel(row.created_at)"></div>
+                  </td>
+                  <td class="px-5 py-3.5">
+                    <span class="text-[12px] font-bold text-[#172B3A] tabular-nums" x-text="leaveDaysLabel(row.days)"></span>
+                  </td>
+                  <td class="px-5 py-3.5">
+                    <div class="text-[12px] text-[#344054] leading-snug" x-text="row.reason"></div>
+                    <div x-show="row.review_note" class="text-[10px] text-[#667085] mt-1" x-text="'Note: '+row.review_note"></div>
+                  </td>
+                  <td class="px-5 py-3.5">
+                    <span class="inline-flex items-center gap-1 text-[10px] font-extrabold px-2.5 py-1 rounded-full whitespace-nowrap"
+                          :class="row.status==='approved'?'bg-[#ECFDF3] text-[#16803C]':row.status==='rejected'?'bg-[#FEF3F2] text-[#B42318]':row.status==='pending'?'bg-[#FFFAEB] text-[#B54708]':'bg-[#F2F4F7] text-[#344054]'">
+                      <span x-text="row.status==='approved'?'Approved':row.status==='rejected'?'Rejected':row.status==='pending'?'Pending':'Cancelled'"></span>
+                    </span>
+                    <div x-show="row.reviewed_by" class="text-[10px] text-[#98A2B3] mt-1" x-text="row.reviewed_by"></div>
+                  </td>
+                  <td class="px-5 py-3.5">
+                    <div class="flex items-center gap-1.5">
+                      <template x-if="isAdmin && row.status==='pending'">
+                        <div class="flex items-center gap-1.5">
+                          <button type="button" @click="decideLeave(row,'approved')" class="inline-flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#ECFDF3] text-[#16803C] hover:bg-[#16803C] hover:text-white transition-colors">Approve</button>
+                          <button type="button" @click="openLeaveReject(row)" class="inline-flex items-center gap-1 text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#FEF3F2] text-[#B42318] hover:bg-[#B42318] hover:text-white transition-colors">Decline</button>
+                        </div>
+                      </template>
+                      <button type="button" x-show="!isAdmin && row.status==='pending' && Number(row.account_id)===currentUserId"
+                              @click="cancelLeave(row)"
+                              class="inline-flex items-center text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC] transition-colors">Cancel</button>
+                    </div>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+        </div>
+
+        <div x-show="filteredLeaves.length===0" class="flex flex-col items-center justify-center p-10 text-center">
+          <svg class="w-9 h-9 text-[#D1D9E6] mb-3"><use href="#icon-calendar"/></svg>
+          <div class="text-[14px] font-bold text-[#344054] mb-1">No leave requests</div>
+          <div class="text-[12px] text-[#667085]" x-text="isAdmin ? 'Team requests will show here for approval.' : 'Submit a request and Admin will confirm it before it is counted as leave.'"></div>
+        </div>
+      </div>
+    </div><!-- /leave -->
+
     <?php include __DIR__.'/reports-view.php'; ?>
 
   </div><!-- /content -->
@@ -1370,7 +1667,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
      style="background:rgba(7,29,43,0.60);backdrop-filter:blur(4px)">
   <div class="bg-white rounded-[14px] w-full max-w-[380px] flex flex-col" style="box-shadow:0 20px 60px rgba(7,29,43,0.18)">
 
-    <!-- Header — matches Schedule Follow-up exactly -->
+    <!-- Header  matches Schedule Follow-up exactly -->
     <div class="flex items-center justify-between px-5 py-4 rounded-t-[14px] shrink-0" style="background:#071D2B">
       <div>
         <h2 class="text-[16px] font-bold text-white leading-tight">Upload Documents</h2>
@@ -1409,7 +1706,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
 
     </div>
 
-    <!-- Footer — matches Schedule Follow-up exactly -->
+    <!-- Footer  matches Schedule Follow-up exactly -->
     <div class="border-t border-[#E4E7EC] px-5 py-3.5 flex justify-end gap-2 shrink-0 rounded-b-[14px] bg-white">
       <button @click="_stepUploadFor=null" class="text-[12px] font-bold px-4 py-2 rounded-[8px] bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC] transition-colors">Cancel</button>
       <button @click="submitStepUpload()"
@@ -1424,7 +1721,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
   </div>
 </div>
 
-<!-- Reminders — Add Follow-up Modal -->
+<!-- Reminders  Add Follow-up Modal -->
 <div x-show="rmAddOpen" x-cloak @click.self="rmAddOpen=false"
      class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(7,29,43,0.60);backdrop-filter:blur(4px)">
   <div class="bg-white rounded-[14px] w-full max-w-[700px] flex flex-col" style="box-shadow:0 20px 60px rgba(7,29,43,0.18);max-height:90vh">
@@ -1717,6 +2014,155 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
   </div>
 </div>
 
+<!-- Admin Remark Modal -->
+<template x-if="adminRemarkFor">
+<div @click.self="adminRemarkFor=null"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(7,29,43,0.60);backdrop-filter:blur(4px)">
+  <div class="bg-white rounded-[14px] w-full max-w-[580px] flex flex-col" style="box-shadow:0 20px 60px rgba(7,29,43,0.18);max-height:90vh">
+    <div class="flex items-center justify-between px-5 py-4 rounded-t-[14px] shrink-0" style="background:#071D2B">
+      <div class="flex items-center gap-2.5">
+        <div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:rgba(181,71,8,0.25)">
+          <svg class="w-4 h-4" style="color:#FBBF24"><use href="#icon-shield-check"/></svg>
+        </div>
+        <div>
+          <h2 class="text-[16px] font-bold text-white leading-tight">Admin Remark</h2>
+          <p class="text-[11px] mt-0.5" style="color:rgba(255,255,255,0.55)" x-text="adminRemarkFor?(adminRemarkFor.id+' · '+adminRemarkFor.client):''"></p>
+        </div>
+      </div>
+      <button @click="adminRemarkFor=null" class="hover:text-white transition-colors ml-4 text-xl" style="color:rgba(255,255,255,0.5)">✕</button>
+    </div>
+    <div class="overflow-y-auto flex-1 p-5">
+      <p class="text-[11px] text-[#B54708] mb-2">Visible to all members of this inquiry.</p>
+      <textarea x-model="adminRemarkFor._adminRemark" rows="5"
+                placeholder="Add a remark visible to everyone involved in this inquiry…"
+                @keydown.ctrl.enter="saveAdminRemark(adminRemarkFor)"
+                class="w-full text-[13px] text-[#172B3A] bg-white border border-[#FDE68A] rounded-[8px] px-3 py-2 resize-none focus:outline-none focus:border-[#F59E0B] placeholder:text-[#D1D9E6]"></textarea>
+    </div>
+    <div class="border-t border-[#E4E7EC] px-5 py-3.5 flex justify-end gap-2 shrink-0 rounded-b-[14px] bg-white">
+      <button @click="adminRemarkFor=null" :disabled="adminRemarkFor && adminRemarkFor._adminRemarkSaving" class="text-[12px] font-bold px-4 py-2 rounded-[8px] bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC] transition-colors disabled:opacity-50">Cancel</button>
+      <button type="button" @click="saveAdminRemark(adminRemarkFor)" :disabled="adminRemarkFor && adminRemarkFor._adminRemarkSaving" class="flex items-center justify-center gap-1.5 text-[12px] font-bold px-4 py-2 rounded-[8px] bg-[#B54708] text-white hover:bg-[#B42318] transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+        <svg x-show="adminRemarkFor && adminRemarkFor._adminRemarkSaving" class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        <span x-text="adminRemarkFor && adminRemarkFor._adminRemarkSaving ? 'Saving…' : 'Save Remark'"></span>
+      </button>
+    </div>
+  </div>
+</div>
+</template>
+
+<!-- Team Remark Modal -->
+<template x-if="teamRemarkFor">
+<div @click.self="teamRemarkFor=null"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(7,29,43,0.60);backdrop-filter:blur(4px)">
+  <div class="bg-white rounded-[14px] w-full max-w-[580px] flex flex-col" style="box-shadow:0 20px 60px rgba(7,29,43,0.18);max-height:90vh">
+    <div class="flex items-center justify-between px-5 py-4 rounded-t-[14px] shrink-0" style="background:#071D2B">
+      <div class="flex items-center gap-2.5">
+        <div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:rgba(18,104,243,0.25)">
+          <svg class="w-4 h-4" style="color:#60A5FA"><use href="#icon-message-circle"/></svg>
+        </div>
+        <div>
+          <h2 class="text-[16px] font-bold text-white leading-tight">Remark</h2>
+          <p class="text-[11px] mt-0.5" style="color:rgba(255,255,255,0.55)" x-text="teamRemarkFor?(teamRemarkFor.id+' · '+teamRemarkFor.client):''"></p>
+        </div>
+      </div>
+      <button @click="teamRemarkFor=null" class="hover:text-white transition-colors ml-4 text-xl" style="color:rgba(255,255,255,0.5)">✕</button>
+    </div>
+    <div class="overflow-y-auto flex-1 p-5">
+      <p class="text-[11px] text-[#175CD3] mb-2">Visible to everyone on this inquiry, including <span class="font-bold" x-text="teamRemarkFor?.created_by"></span> who created it. Shown with your name attached.</p>
+      <textarea x-model="teamRemarkFor._teamRemark" rows="5"
+                placeholder="Add a remark for the inquiry creator and team…"
+                @keydown.ctrl.enter="saveTeamRemark(teamRemarkFor)"
+                class="w-full text-[13px] text-[#172B3A] bg-white border border-[#DBEAFE] rounded-[8px] px-3 py-2 resize-none focus:outline-none focus:border-[#1268F3] placeholder:text-[#D1D9E6]"></textarea>
+    </div>
+    <div class="border-t border-[#E4E7EC] px-5 py-3.5 flex justify-end gap-2 shrink-0 rounded-b-[14px] bg-white">
+      <button @click="teamRemarkFor=null" :disabled="teamRemarkFor && teamRemarkFor._teamRemarkSaving" class="text-[12px] font-bold px-4 py-2 rounded-[8px] bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC] transition-colors disabled:opacity-50">Cancel</button>
+      <button type="button" @click="saveTeamRemark(teamRemarkFor)" :disabled="teamRemarkFor && teamRemarkFor._teamRemarkSaving" class="flex items-center justify-center gap-1.5 text-[12px] font-bold px-4 py-2 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors disabled:opacity-60 disabled:cursor-not-allowed">
+        <svg x-show="teamRemarkFor && teamRemarkFor._teamRemarkSaving" class="w-3.5 h-3.5 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        <span x-text="teamRemarkFor && teamRemarkFor._teamRemarkSaving ? 'Saving…' : 'Save Remark'"></span>
+      </button>
+    </div>
+  </div>
+</div>
+</template>
+
+<!-- Schedule Follow-up Modal -->
+<template x-if="fuOpenFor">
+<div @click.self="fuOpenFor=null"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(7,29,43,0.60);backdrop-filter:blur(4px)">
+  <div class="bg-white rounded-[14px] w-full max-w-[580px] flex flex-col" style="box-shadow:0 20px 60px rgba(7,29,43,0.18);max-height:90vh">
+    <div class="flex items-center justify-between px-5 py-4 rounded-t-[14px] shrink-0" style="background:#071D2B">
+      <div class="flex items-center gap-2.5">
+        <div class="w-7 h-7 rounded-full flex items-center justify-center shrink-0" style="background:rgba(18,104,243,0.25)">
+          <svg class="w-4 h-4 text-[#B8CCED]"><use href="#icon-bell"/></svg>
+        </div>
+        <div>
+          <h2 class="text-[16px] font-bold text-white leading-tight">Schedule Follow-up</h2>
+          <p class="text-[11px] mt-0.5" style="color:rgba(255,255,255,0.55)" x-text="fuOpenFor?(fuOpenFor.id+' · '+fuOpenFor.client):''"></p>
+        </div>
+      </div>
+      <button @click="fuOpenFor=null" class="hover:text-white transition-colors ml-4 text-xl" style="color:rgba(255,255,255,0.5)">✕</button>
+    </div>
+    <div class="overflow-y-auto flex-1 p-5 space-y-4">
+      <div>
+        <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Note <span class="text-[#B42318]">*</span></label>
+        <input x-model="fuForm.note" type="text" placeholder="e.g. Call client for proposal feedback"
+               class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white">
+      </div>
+      <div class="grid grid-cols-2 gap-3">
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Date <span class="text-[#B42318]">*</span></label>
+          <input x-model="fuForm.date" type="date"
+                 class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white">
+        </div>
+        <div>
+          <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Time <span class="font-normal normal-case text-[#B8CCED]">(optional)</span></label>
+          <input x-model="fuForm.time" type="time"
+                 class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white">
+        </div>
+      </div>
+      <div>
+        <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Assigned To</label>
+        <select x-model="fuForm.assignedTo"
+                class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 bg-white focus:outline-none focus:border-[#1268F3] cursor-pointer">
+          <option value="">Me (<?= htmlspecialchars($user['name']) ?>)</option>
+          <template x-for="a in accounts.filter(a=>a.status==='approved')" :key="a.id">
+            <option :value="a.name" x-text="a.name"></option>
+          </template>
+        </select>
+      </div>
+    </div>
+    <div class="border-t border-[#E4E7EC] px-5 py-3.5 flex justify-end gap-2 shrink-0 rounded-b-[14px] bg-white">
+      <button @click="fuOpenFor=null" class="text-[12px] font-bold px-4 py-2 rounded-[8px] bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC] transition-colors">Cancel</button>
+      <button @click="addFollowUp(fuOpenFor)" class="text-[12px] font-bold px-4 py-2 rounded-[8px] bg-[#1268F3] text-white hover:bg-[#0f55d6] transition-colors flex items-center gap-1.5">
+        Schedule <svg class="w-3 h-3"><use href="#icon-arrow-right"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+</template>
+
+<!-- Decline Leave Modal -->
+<div x-show="leaveRejectFor" x-cloak @click.self="leaveRejectFor=null"
+     class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(7,29,43,0.60);backdrop-filter:blur(4px)">
+  <div class="bg-white rounded-[14px] w-full max-w-[420px] flex flex-col" style="box-shadow:0 20px 60px rgba(7,29,43,0.18)">
+    <div class="flex items-center justify-between px-5 py-4 rounded-t-[14px] shrink-0" style="background:#071D2B">
+      <div>
+        <h2 class="text-[16px] font-bold text-white leading-tight">Decline leave</h2>
+        <p class="text-[11px] mt-0.5" style="color:rgba(255,255,255,0.55)" x-text="leaveRejectFor ? (leaveRejectFor.name+' · '+leaveDateLabel(leaveRejectFor)) : ''"></p>
+      </div>
+      <button @click="leaveRejectFor=null" class="hover:text-white transition-colors ml-4 text-xl" style="color:rgba(255,255,255,0.5)">✕</button>
+    </div>
+    <div class="p-5">
+      <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Note <span class="font-normal normal-case text-[#98A2B3]">(optional)</span></label>
+      <textarea x-model="leaveRejectNote" rows="3" placeholder="Reason for declining, if you want to share one…"
+                class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white resize-none"></textarea>
+    </div>
+    <div class="border-t border-[#E4E7EC] px-5 py-3.5 flex justify-end gap-2 shrink-0 rounded-b-[14px] bg-white">
+      <button @click="leaveRejectFor=null" class="text-[12px] font-bold px-4 py-2 rounded-[8px] bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC] transition-colors">Back</button>
+      <button @click="decideLeave(leaveRejectFor,'rejected')" class="text-[12px] font-bold px-4 py-2 rounded-[8px] bg-[#B42318] text-white hover:bg-[#912018] transition-colors">Decline request</button>
+    </div>
+  </div>
+</div>
+
 <!-- Complete Inquiry Modal -->
 <div x-show="completeInquiryFor" x-cloak @click.self="completeInquiryFor=null"
      class="fixed inset-0 z-50 flex items-center justify-center p-4" style="background:rgba(7,29,43,0.60);backdrop-filter:blur(4px)">
@@ -1837,7 +2283,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
           <div>
             <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Client Type *</label>
             <select x-model="addInquiryForm.clientType" class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white cursor-pointer">
-              <option>New</option><option>Existing Contact / Prospect</option><option>Repeat</option>
+              <option>New</option><option>Existing</option><option>Repeat</option>
             </select>
           </div>
           <!-- Client check message -->
@@ -1908,7 +2354,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
       </div>
       <div x-show="addInquiryForm.inquiryType==='Internal Usage'" class="flex items-center gap-2 text-[11px] font-semibold text-[#026AA2] bg-[#EFF8FF] border border-[#BAE6FD] rounded-[8px] px-3 py-2">
         <svg class="w-3.5 h-3.5 shrink-0"><use href="#icon-check-circle"/></svg>
-        Internal inquiry — Client and Company will be recorded as "Internal".
+        Internal inquiry  Client and Company will be recorded as "Internal".
       </div>
       <!-- Requirement -->
       <div>
@@ -2083,7 +2529,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
         <div class="border border-[#E4E7EC] rounded-[10px] px-4 py-3 overflow-hidden">
           <div class="text-[9px] font-bold uppercase tracking-[0.06em] text-[#98A2B3] mb-1.5">Requirement</div>
           <div class="text-[12px] text-[#344054] leading-[1.7] rich-editor min-w-0"
-               style="overflow-wrap:anywhere;word-break:break-word"
+               :style="_reqExpanded ? 'overflow-wrap:anywhere;word-break:break-word;max-height:320px;overflow-y:auto;padding-right:4px' : 'overflow-wrap:anywhere;word-break:break-word'"
                :class="!_reqExpanded ? 'line-clamp-6' : ''"
                x-html="linkify(summaryFor?.requirement||'')"></div>
           <button x-show="stripHtml(summaryFor?.requirement||'').length>200" @click="_reqExpanded=!_reqExpanded" class="text-[11px] font-semibold mt-1.5 text-[#1268F3] hover:underline" x-text="_reqExpanded?'Show less':'Read more'"></button>
@@ -2218,9 +2664,9 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
 
 <!-- Requirement popup -->
 <div x-show="reqPopup.show" x-cloak
-     :style="{ position:'fixed', left:reqPopup.x+'px', top:reqPopup.y+'px', zIndex:9999, maxWidth:'320px', background:darkMode?'#151B23':'#fff', border:'1px solid '+(darkMode?'#2A323D':'#D1D9E6'), borderRadius:'10px', padding:'12px 14px', boxShadow:'0 8px 28px rgba(7,29,43,0.14)', pointerEvents:'none' }">
+     :style="{ position:'fixed', left:reqPopup.x+'px', top:reqPopup.y+'px', zIndex:9999, maxWidth:'320px', maxHeight:'280px', overflowY:'auto', background:darkMode?'#151B23':'#fff', border:'1px solid '+(darkMode?'#2A323D':'#D1D9E6'), borderRadius:'10px', padding:'12px 14px', boxShadow:'0 8px 28px rgba(7,29,43,0.14)', pointerEvents:'none' }">
   <div class="text-[10px] font-bold uppercase tracking-[0.06em] text-[#98A2B3] mb-1.5">Requirement</div>
-  <div class="text-[12px] text-[#344054] leading-[1.7]" x-text="reqPopup.text"></div>
+  <div class="text-[12px] text-[#344054] leading-[1.7]" style="overflow-wrap:anywhere;word-break:break-word" x-text="reqPopup.text"></div>
 </div>
 
 <!-- ═══ INLINE ICON SPRITES (no external request) ════════════════════════════ -->
@@ -2237,6 +2683,9 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
   <symbol id="icon-refresh-cw" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></symbol>
   <symbol id="icon-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></symbol>
   <symbol id="icon-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></symbol>
+  <symbol id="icon-message-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/></symbol>
+  <symbol id="icon-send" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/></symbol>
+  <symbol id="icon-megaphone" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 11 18-5v12L3 14v-3z"/><path d="M11.6 16.8a3 3 0 1 1-5.8-1.6"/></symbol>
   <symbol id="icon-search" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></symbol>
   <symbol id="icon-chevron-down" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></symbol>
   <symbol id="icon-chevron-left" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></symbol>
@@ -2244,11 +2693,13 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
   <symbol id="icon-user" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></symbol>
   <symbol id="icon-file-text" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></symbol>
   <symbol id="icon-trash-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/></symbol>
+  <symbol id="icon-edit-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></symbol>
   <symbol id="icon-paperclip" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></symbol>
   <symbol id="icon-mail" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><polyline points="22,6 12,13 2,6"/></symbol>
   <symbol id="icon-building2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="18"/><path d="M16 8h4l3 3v10H16V8z"/><line x1="5" y1="7" x2="9" y2="7"/><line x1="5" y1="11" x2="9" y2="11"/><line x1="5" y1="15" x2="9" y2="15"/></symbol>
   <symbol id="icon-arrow-right" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></symbol>
   <symbol id="icon-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></symbol>
+  <symbol id="icon-calendar" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></symbol>
   <symbol id="icon-save" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></symbol>
   <symbol id="icon-chevron-up" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="18 15 12 9 6 15"/></symbol>
   <symbol id="icon-check-circle" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></symbol>
@@ -2267,6 +2718,7 @@ function spApp() {
     // ── Seeded from PHP ──
     inquiries: <?= json_encode($inquiries, JSON_HEX_TAG) ?>,
     accounts:  <?= json_encode($accounts,  JSON_HEX_TAG) ?>,
+    currentUserId: <?= json_encode((int)$user['id']) ?>,
     currentUser:  <?= json_encode($user['name'],  JSON_HEX_TAG) ?>,
     currentRole:  <?= json_encode($user['role'],  JSON_HEX_TAG) ?>,
     currentEmail: <?= json_encode($user['email'], JSON_HEX_TAG) ?>,
@@ -2279,6 +2731,33 @@ function spApp() {
     notifsOpen: false,
     toasts: [],
     notifications: [],
+    onlineIds: [],
+    lastSeen: {},
+    contacts: [],
+    msgSearch: '',
+    activeContact: null,
+    thread: [],
+    threadLoading: false,
+    messageText: '',
+    unreadMessages: 0,
+    announcements: [],
+    announcementText: '',
+    _postingAnnouncement: false,
+    _sendingAttachment: false,
+    unreadAnnouncements: 0,
+    leaves: [],
+    leaveSummary: { entitlement: 18, taken: 0, pending: 0, remaining: 18, year: new Date().getFullYear() },
+    leaveFilter: 'all',
+    leaveTypeFilter: '',
+    leaveUserFilter: '',
+    leaveMonth: new Date().toISOString().slice(0,7),
+    leaveTypes: ['Casual Leave','Half Day','Sick Leave','Emergency Leave','WFH'],
+    leaveForm: { leaveType: 'Casual Leave', startDate: new Date().toLocaleDateString('en-CA'), endDate: new Date().toLocaleDateString('en-CA'), reason: '' },
+    leaveErr: '',
+    leaveRejectFor: null,
+    leaveRejectNote: '',
+    pendingLeaves: 0,
+    _leaveSaving: false,
     highlightedInq: null,
     reqPopup: { show: false, text: '', x: 0, y: 0 },
 
@@ -2287,7 +2766,7 @@ function spApp() {
     employee: '',
     stageFilter: '',
     typeFilter: '',
-    myOnly: false,
+    dateFilter: '',
     _inqPage: 0,
 
     darkMode: localStorage.getItem('sp_theme')==='dark',
@@ -2308,6 +2787,8 @@ function spApp() {
     summaryFor: null,
     _reqExpanded: false,
     completeInquiryFor: null,
+    adminRemarkFor: null,
+    teamRemarkFor: null,
     completeInquiryRemark: '',
     _completeInquiryErr: false,
     _completingInquiry: false,
@@ -2319,6 +2800,9 @@ function spApp() {
     fuOpenFor: null,
     confirmDeleteAccount: null,
 
+    // ── My Tasks view ──
+    taskViewFilter: 'to_me', // 'to_me' | 'by_me'
+
     // ── Reminders view ──
     rmFollowUps: <?= json_encode($allFollowUps, JSON_HEX_TAG) ?>,
     rmFilter: 'all',
@@ -2329,7 +2813,7 @@ function spApp() {
         if (this.rmFilter==='upcoming') return !f.completed && f.follow_up_date>today;
         if (this.rmFilter==='overdue')  return !f.completed && f.follow_up_date<today;
         if (this.rmFilter==='done')     return !!f.completed;
-        return !f.completed; // 'all' — never show completed here, those live in History
+        return !f.completed; // 'all'  never show completed here, those live in History
       });
     },
     rmAddOpen: false,
@@ -2358,14 +2842,16 @@ function spApp() {
         _open: false,
         _adminRemark: i.admin_remark || '',
         _adminRemarkSaving: false,
+        _teamRemark: i.team_remark || '',
+        _teamRemarkSaving: false,
         steps: (i.steps||[]).map(s => ({ ...s, _remark: s.remark||'', _saved: false, _remarkOpen: false, _instruction: s.instruction||'', _instrSaved: false }))
       }));
       this.addInquiryForm.createdBy = this.currentUser;
       this.fetchNotifications();
       setInterval(() => this.fetchNotifications(), 30000);
-      this.$watch('view', () => { this.search=''; this._mob=false; this.statFilter=''; this.fuOpenFor=null; this._inqPage=0; });
-      ['search','statFilter','stageFilter','typeFilter','employee','myOnly'].forEach(k => this.$watch(k, () => { this._inqPage=0; }));
-      setTimeout(() => this._startPolling(), 8000); // first ping after 8s, then every 30s
+      this.$watch('view', () => { this.search=''; this._mob=false; this.statFilter=''; this.fuOpenFor=null; this._inqPage=0; this.msgSearch=''; if (this.view==='messages') this.refreshContacts(); if (this.view==='announcements') this.loadAnnouncements(); if (this.view==='leave') this.loadLeaves(); });
+      ['search','statFilter','stageFilter','typeFilter','employee','dateFilter'].forEach(k => this.$watch(k, () => { this._inqPage=0; }));
+      this._startPolling();
       this.$watch('addInquiryForm.client', name => {
         const t = (name||'').trim().toLowerCase();
         if (t.length < 2) { this.addInquiryForm._clientExists = false; return; }
@@ -2397,14 +2883,19 @@ function spApp() {
         try {
           const d = await fetch('api/ping.php').then(r=>r.json());
           if (!d.ok) return;
+          this.onlineIds = (d.onlineIds || []).map(Number);
+          this.lastSeen  = d.lastSeen || {};
           // First run: set baseline silently
           if (!this._pollBase.inquiry) {
             this._pollBase = {
               inquiry: d.latestInquiry, step: d.latestStep, stepUpd: d.latestStepUpd,
               att: d.latestAtt, inqAtt: d.latestInqAtt,
               history: d.latestHistory, fu: d.latestFollowUp, fuCompleted: d.latestFuCompleted,
-              pending: d.pendingApprovals, unread: d.unreadNotifications
+              pending: d.pendingApprovals, unread: d.unreadNotifications, unreadMsg: d.unreadMessages, unreadAnn: d.unreadAnnouncements, pendingLeaves: d.pendingLeaves || 0
             };
+            this.unreadMessages = d.unreadMessages;
+            this.unreadAnnouncements = d.unreadAnnouncements;
+            this.pendingLeaves = d.pendingLeaves || 0;
             return;
           }
           // Any inquiry-level change: new inquiry, stage update, step add/update, any attachment, follow-up change
@@ -2426,11 +2917,11 @@ function spApp() {
             await this.refreshInquiries();
             if (isNewInquiry) this.addToast('New inquiry received', 'info');
           }
-          // Follow-up added or completed — invalidate followUps cache so strips refresh on next open
+          // Follow-up added or completed  invalidate followUps cache so strips refresh on next open
           if (changed(d.latestFollowUp, this._pollBase.fu) || changed(d.latestFuCompleted, this._pollBase.fuCompleted)) {
             this._pollBase.fu          = d.latestFollowUp;
             this._pollBase.fuCompleted = d.latestFuCompleted;
-            this.followUps = {}; // clear cache — strips reload lazily on next expand
+            this.followUps = {}; // clear cache  strips reload lazily on next expand
           }
           // New pending approval request
           if (d.pendingApprovals > this._pollBase.pending) {
@@ -2449,10 +2940,38 @@ function spApp() {
           } else {
             this._pollBase.unread = d.unreadNotifications;
           }
-        } catch(e) { /* silent — offline or server busy */ }
+          // New messages  live-refresh the contact list and any open thread
+          if (d.unreadMessages !== this._pollBase.unreadMsg) {
+            this._pollBase.unreadMsg = d.unreadMessages;
+            this.unreadMessages = d.unreadMessages;
+            if (this.view === 'messages') {
+              await this.refreshContacts();
+              if (this.activeContact) await this.refreshThread();
+            }
+          }
+          // New announcements  live-refresh the feed if it's open, badge otherwise
+          if (d.unreadAnnouncements !== this._pollBase.unreadAnn) {
+            this._pollBase.unreadAnn = d.unreadAnnouncements;
+            if (this.view === 'announcements') await this.loadAnnouncements();
+            else this.unreadAnnouncements = d.unreadAnnouncements;
+          }
+          const pendingLeaves = d.pendingLeaves || 0;
+          if (pendingLeaves !== this._pollBase.pendingLeaves) {
+            const was = this._pollBase.pendingLeaves;
+            this._pollBase.pendingLeaves = pendingLeaves;
+            this.pendingLeaves = pendingLeaves;
+            if (this.view === 'leave') await this.loadLeaves();
+            else if (pendingLeaves > was) this.addToast('New leave request', 'info');
+          }
+        } catch(e) { /* silent  offline or server busy */ }
       };
       await poll(); // immediate first ping to set baseline
-      setInterval(poll, 10000); // every 10 seconds
+      // ponytail: self-rescheduling timeout instead of setInterval so the delay can adapt each tick
+      const schedule = () => {
+        const fast = this.view === 'messages' || this.view === 'announcements';
+        setTimeout(async () => { await poll(); schedule(); }, fast ? 3000 : 10000);
+      };
+      schedule();
     },
 
     _remap(data) {
@@ -2463,11 +2982,14 @@ function spApp() {
           _open: old?._open || false,
           _adminRemark: old?._adminRemark ?? i.admin_remark ?? '',
           _adminRemarkSaving: false,
+          _teamRemark: old?._teamRemark ?? i.team_remark ?? '',
+          _teamRemarkSaving: false,
           history: old?.history || [],
           _historyLoaded: old?._historyLoaded || false,
           steps: (i.steps||[]).map(s => {
             const os = (old?.steps||[]).find(x => x.id === s.id);
-            return { ...s, _remark: os?._remark ?? s.remark ?? '', _saved: os?._saved || false, _remarkOpen: os?._remarkOpen || false, _instruction: s.instruction||'', _instrSaved: false };
+            const reassigned = os && os.assigned_to !== s.assigned_to;
+            return { ...s, _remark: reassigned ? (s.remark || '') : (os?._remark ?? s.remark ?? ''), _saved: os?._saved || false, _remarkOpen: os?._remarkOpen || false, _instruction: s.instruction||'', _instrSaved: false };
           })
         };
       });
@@ -2479,11 +3001,46 @@ function spApp() {
     get isClient()     { return this.currentRole==='Client'; },
     get pendingCount() { return this.accounts.filter(a=>a.status==='pending').length; },
     get unreadCount()  { return this.notifications.filter(n=>!n.is_read).length; },
+    isOnline(id) {
+      return this.onlineIds.some(x => Number(x) === Number(id));
+    },
+    lastSeenLabel(id) {
+      const ts = this.lastSeen[id] || this.lastSeen[String(id)];
+      if (!ts) return 'Offline';
+      const t = new Date(String(ts).replace(' ','T')).getTime();
+      if (!t) return 'Offline';
+      const mins = Math.round((Date.now() - t) / 60000);
+      if (mins < 1)  return 'Last seen just now';
+      if (mins < 60) return 'Last seen '+mins+'m ago';
+      const hrs = Math.round(mins / 60);
+      if (hrs < 24)  return 'Last seen '+hrs+'h ago';
+      return 'Last seen '+new Date(t).toLocaleDateString([], {day:'2-digit', month:'short'});
+    },
+    get messagingContacts() {
+      const summaryById = {};
+      this.contacts.forEach(c => summaryById[c.account_id] = c);
+      return this.accounts
+        .filter(a => a.id !== this.currentUserId && a.status === 'approved')
+        .filter(a => !this.isClient || a.role !== 'Client')
+        .map(a => {
+          const s = summaryById[a.id];
+          return { ...a, unread: s ? s.unread : 0, last_at: s ? s.last_at : '', last_body: s ? s.last_body : '',
+                   _lastTime: s && s.last_at ? this._fmtTime(s.last_at) : '',
+                   online: this.isOnline(a.id),
+                   _initials: a.name.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase() };
+        })
+        .sort((x,y) => (y.online - x.online) || (y.unread - x.unread) || (y.last_at > x.last_at ? 1 : -1) || x.name.localeCompare(y.name));
+    },
+    get filteredContacts() {
+      const q = this.msgSearch.trim().toLowerCase();
+      if (!q) return this.messagingContacts;
+      return this.messagingContacts.filter(c => c.name.toLowerCase().includes(q) || c.role.toLowerCase().includes(q));
+    },
 
     get viewingEmployee() { return !!this.employee && this.employee !== this.currentUser; },
 
     get viewTitle() {
-      return {dashboard:'Dashboard',tasks:'My Tasks',approvals:'User Management',reminders:'Reminders',reports:'Reports'}[this.view]||'';
+      return {dashboard:'Dashboard',tasks:'My Tasks',approvals:'User Management',reminders:'Reminders',reports:'Reports',messages:'Messages',announcements:'Announcements',leave:'Leave'}[this.view]||'';
     },
 
     get clientSuggestions() {
@@ -2499,7 +3056,7 @@ function spApp() {
       const exists = this.inquiries.some(i => i.client.toLowerCase() === name.toLowerCase());
       if (type === 'New') {
         return exists
-          ? { kind:'warning', text:'A client named "'+name+'" already exists in records. Consider changing the type to "Existing Contact / Prospect" or "Repeat".' }
+          ? { kind:'warning', text:'A client named "'+name+'" already exists in records. Consider changing the type to "Existing" or "Repeat".' }
           : { kind:'success', text:'Client is new no existing records found.' };
       }
       return exists
@@ -2526,10 +3083,10 @@ function spApp() {
         if (this.statFilter==='received'   && (isClosed(inq) || inq.stage!=='Inquiry')) return false;
         if (this.statFilter==='inProgress' && (isClosed(inq) || inq.stage==='Inquiry')) return false;
         if (this.statFilter==='overdue'    && (!inq.overdue || isClosed(inq))) return false;
-        if (this.myOnly && inq.created_by!==this.currentUser && inq.current_owner!==this.currentUser) return false;
         if (this.employee && inq.current_owner!==this.employee && inq.created_by!==this.employee && !(inq.steps||[]).some(s=>s.assigned_to===this.employee||s.assigned_by===this.employee)) return false;
         if (this.stageFilter && inq.stage!==this.stageFilter) return false;
         if (this.typeFilter && inq.inquiry_type!==this.typeFilter) return false;
+        if (this.dateFilter==='today' && !this._isCreatedToday(inq)) return false;
         if (this.search) {
           const q = this.search.toLowerCase();
           return inq.id.toLowerCase().includes(q)||inq.client.toLowerCase().includes(q)||inq.company.toLowerCase().includes(q)||this.stripHtml(inq.requirement||'').toLowerCase().includes(q);
@@ -2539,8 +3096,8 @@ function spApp() {
     },
 
     get pagedInqs() {
-      const s = this._inqPage * 10;
-      return this.filtered.slice(s, s + 10);
+      const s = this._inqPage * 15;
+      return this.filtered.slice(s, s + 15);
     },
 
     get stats() {
@@ -2571,7 +3128,7 @@ function spApp() {
         this.employee    && { label:'Employee: '+this.employee,   clear:()=>this.employee='' },
         this.stageFilter && { label:'Stage: '+this.stageFilter,   clear:()=>this.stageFilter='' },
         this.typeFilter  && { label:'Type: '+this.typeFilter,     clear:()=>this.typeFilter='' },
-        this.myOnly      && { label:'My Inquiries',               clear:()=>this.myOnly=false },
+        this.dateFilter  && { label:'Created: Today',             clear:()=>this.dateFilter='' },
       ].filter(Boolean);
     },
 
@@ -2580,7 +3137,7 @@ function spApp() {
       return [...new Set(this.accounts.map(a=>a.role).filter(r=>!std.includes(r)))];
     },
 
-    get myTasks() {
+    get tasksAssignedToMe() {
       const out = [];
       this.inquiries.forEach(inq => {
         (inq.steps||[]).forEach(step => {
@@ -2589,6 +3146,19 @@ function spApp() {
         });
       });
       return out;
+    },
+    get tasksAssignedByMe() {
+      const out = [];
+      this.inquiries.forEach(inq => {
+        (inq.steps||[]).forEach(step => {
+          if (step.assigned_by===this.currentUser && step.assigned_to!==this.currentUser && !['Done','Completed','Cancelled'].includes(step.status))
+            out.push({ inq, step });
+        });
+      });
+      return out;
+    },
+    get myTasks() {
+      return this.taskViewFilter==='by_me' ? this.tasksAssignedByMe : this.tasksAssignedToMe;
     },
 
     get teamWorkload() {
@@ -2604,7 +3174,7 @@ function spApp() {
 
 
     // ── Helpers ──
-    resetFilters() { this.search=''; this.employee=''; this.stageFilter=''; this.typeFilter=''; this.myOnly=false; this.statFilter=''; this._inqPage=0; },
+    resetFilters() { this.search=''; this.employee=''; this.stageFilter=''; this.typeFilter=''; this.statFilter=''; this.dateFilter=''; this._inqPage=0; },
 
     initials(name) { return (name||'').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase(); },
 
@@ -2812,7 +3382,7 @@ function spApp() {
       else this.addToast(d.message,'error');
     },
 
-    // ── Closed check (mirrors stats getter) — used to hide Complete Inquiry once closed ──
+    // ── Closed check (mirrors stats getter)  used to hide Complete Inquiry once closed ──
     isInquiryClosed(inq) {
       return inq.outcome==='Inquiry Closed'
         || ['Payment Received','Inquiry Closed'].includes(inq.outcome)
@@ -2917,17 +3487,27 @@ function spApp() {
       }
     },
 
-    autoSaveAdminRemark(inq) {
-      clearTimeout(inq._adminRemarkTimer);
-      inq._adminRemarkTimer = setTimeout(() => this.saveAdminRemark(inq), 1000);
-    },
-
     async saveAdminRemark(inq) {
       inq._adminRemarkSaving = true;
       const d = await this.api('api/inquiry.php', { action:'admin_remark', inquiryId:inq.id, remark:inq._adminRemark });
       inq._adminRemarkSaving = false;
-      if (d.ok) { this.inquiries = this._remap(d.data); this.addToast('Admin remark saved'); }
+      if (d.ok) { this.inquiries = this._remap(d.data); this.adminRemarkFor = null; this.addToast('Admin remark saved'); }
       else this.addToast(d.message||'Failed to save remark','error');
+    },
+
+    async saveTeamRemark(inq) {
+      inq._teamRemarkSaving = true;
+      const d = await this.api('api/inquiry.php', { action:'team_remark', inquiryId:inq.id, remark:inq._teamRemark });
+      inq._teamRemarkSaving = false;
+      if (d.ok) { this.inquiries = this._remap(d.data); this.teamRemarkFor = null; this.addToast('Remark saved'); }
+      else this.addToast(d.message||'Failed to save remark','error');
+    },
+
+    async deleteTeamRemark(inq) {
+      if (!confirm('Delete this remark?')) return;
+      const d = await this.api('api/inquiry.php', { action:'team_remark', inquiryId:inq.id, remark:'' });
+      if (d.ok) { this.inquiries = this._remap(d.data); this.addToast('Remark deleted'); }
+      else this.addToast(d.message||'Failed to delete remark','error');
     },
 
     // ── Delete step ──
@@ -2985,8 +3565,14 @@ function spApp() {
     stripHtml(html) { const d=document.createElement('div'); d.innerHTML=html||''; return d.textContent||d.innerText||''; },
     showReqPopup(e, html) {
       const r = e.currentTarget.getBoundingClientRect();
+      const popupMaxH = 280;
       const x = Math.min(r.left, window.innerWidth - 320);
-      const y = r.bottom + 6 + window.scrollY;
+      let y = r.bottom + 6 + window.scrollY;
+      const viewBottom = window.scrollY + window.innerHeight;
+      if (y + popupMaxH > viewBottom) {
+        // Not enough room below  flip above the row instead
+        y = Math.max(window.scrollY + 8, r.top + window.scrollY - popupMaxH - 6);
+      }
       this.reqPopup = { show: true, text: this.stripHtml(html), x, y };
     },
     hideReqPopup() { this.reqPopup.show = false; },
@@ -3062,7 +3648,7 @@ function spApp() {
         const inq = this.inquiries.find(i => i.id == inquiryId);
         if (inq) { const step = inq.steps.find(s => s.id == stepId); if (step) step.attachments = [...(step.attachments||[]), ...d.saved]; }
         this.addToast(d.saved.length+' file(s) uploaded');
-      } else if (d.ok && !d.saved?.length) this.addToast('File upload failed — check allowed types or server uploads folder','error');
+      } else if (d.ok && !d.saved?.length) this.addToast('File upload failed  check allowed types or server uploads folder','error');
       else this.addToast(d.message||'Upload failed','error');
     },
 
@@ -3177,7 +3763,7 @@ function spApp() {
         const files = this.addInquiryForm._files;
         // Append new inquiry (oldest-first order)
         const ni = d.inquiry;
-        const mapped = { ...ni, _open:false, _adminRemark:ni.admin_remark||'', _adminRemarkSaving:false, history:[], _historyLoaded:false,
+        const mapped = { ...ni, _open:false, _adminRemark:ni.admin_remark||'', _adminRemarkSaving:false, _teamRemark:ni.team_remark||'', _teamRemarkSaving:false, history:[], _historyLoaded:false,
           steps:(ni.steps||[]).map(s=>({...s,_remark:s.remark||'',_saved:false,_remarkOpen:false,_instruction:s.instruction||'',_instrSaved:false})) };
         this.inquiries = [...this.inquiries, mapped];
         if (files && files.length) {
@@ -3290,6 +3876,200 @@ function spApp() {
       await fetch('api/notifications.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'clear_all'}) });
     },
 
+    // ── Messages ──
+    async refreshContacts() {
+      try {
+        const r = await fetch('api/messages.php?action=contacts').then(r=>r.json());
+        if (r.ok) this.contacts = r.data;
+        else this.addToast(r.message||'Could not load conversations','error');
+      } catch { this.addToast('Could not load conversations','error'); }
+    },
+    _fmtTime(ts) {
+      return new Date(ts.replace(' ','T')).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+    },
+    _scrollThreadToBottom() {
+      const el = this.$refs.threadScroll;
+      if (el) el.scrollTop = el.scrollHeight;
+    },
+    async selectContact(c) {
+      this.activeContact = c;
+      this.threadLoading = true;
+      this.thread = [];
+      let r;
+      try { r = await fetch('api/messages.php?action=thread&withId='+c.id).then(r=>r.json()); }
+      catch { this.threadLoading = false; this.addToast('Could not load thread','error'); return; }
+      this.threadLoading = false;
+      if (r.ok) {
+        this.thread = r.data.map(m => ({ ...m, _time: this._fmtTime(m.created_at) }));
+        this.$nextTick(() => this._scrollThreadToBottom());
+      } else this.addToast(r.message||'Could not load thread','error');
+      const entry = this.contacts.find(x => x.account_id === c.id);
+      if (entry && entry.unread) {
+        this.unreadMessages = Math.max(0, this.unreadMessages - entry.unread);
+        entry.unread = 0;
+      }
+    },
+    async refreshThread() {
+      if (this.activeContact) await this.selectContact(this.activeContact);
+    },
+    async sendMessage() {
+      const body = this.messageText.trim();
+      if (!body || !this.activeContact) return;
+      this.messageText = '';
+      const r = await fetch('api/messages.php', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'send', receiverId: this.activeContact.id, body }) }).then(r=>r.json());
+      if (r.ok) await this.selectContact(this.activeContact);
+      else this.addToast(r.message||'Failed to send message','error');
+    },
+    async sendChatAttachment(e) {
+      const file = e.target.files[0];
+      e.target.value = '';
+      if (!file || !this.activeContact) return;
+      this._sendingAttachment = true;
+      const fd = new FormData();
+      fd.append('file', file);
+      fd.append('receiverId', this.activeContact.id);
+      fd.append('body', this.messageText.trim());
+      const r = await fetch('api/messages.php?action=sendFile', { method:'POST', body: fd }).then(r=>r.json());
+      this._sendingAttachment = false;
+      if (r.ok) { this.messageText = ''; await this.selectContact(this.activeContact); }
+      else this.addToast(r.message||'Failed to send file','error');
+    },
+
+    // ── Announcements ──
+    _fmtDate(ts) {
+      return new Date(ts.replace(' ','T')).toLocaleString([], {day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'});
+    },
+    async loadAnnouncements() {
+      const r = await fetch('api/announcements.php?action=list').then(r=>r.json());
+      if (r.ok) {
+        this.announcements = r.data.map(a => ({ ...a, _time: this._fmtDate(a.created_at),
+          _initials: a.created_by.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase() }));
+      }
+      this.unreadAnnouncements = 0;
+      await fetch('api/announcements.php', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({action:'markSeen'}) });
+    },
+    async postAnnouncement() {
+      const body = this.announcementText.trim();
+      if (!body) return;
+      this._postingAnnouncement = true;
+      const r = await fetch('api/announcements.php', { method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ action:'post', body }) }).then(r=>r.json());
+      this._postingAnnouncement = false;
+      if (r.ok) { this.announcementText = ''; await this.loadAnnouncements(); this.addToast('Announcement posted'); }
+      else this.addToast(r.message||'Failed to post announcement','error');
+    },
+
+    // ── Leave ──
+    get leaveDays() {
+      if (this.leaveForm.leaveType === 'Half Day') return 0.5;
+      const s = this.leaveForm.startDate, e = this.leaveForm.endDate;
+      if (!s || !e) return 0;
+      const a = new Date(s+'T00:00:00'), b = new Date(e+'T00:00:00');
+      if (b < a) return 0;
+      return Math.round((b - a) / 86400000) + 1;
+    },
+    get leaveUserOptions() {
+      return [...new Set(this.leaves.map(r => r.name).filter(Boolean))].sort();
+    },
+    get filteredLeaves() {
+      return this.leaves.filter(r => {
+        if (this.leaveFilter !== 'all' && r.status !== this.leaveFilter) return false;
+        if (this.leaveTypeFilter && (r.leave_type || 'Casual Leave') !== this.leaveTypeFilter) return false;
+        if (this.leaveUserFilter && r.name !== this.leaveUserFilter) return false;
+        if (this.isAdmin && this.leaveMonth) {
+          const m = (r.start_date || '').slice(0, 7);
+          if (m && m !== this.leaveMonth) return false;
+        }
+        return true;
+      });
+    },
+    leaveDateLabel(row) {
+      if (!row) return '';
+      const fmt = d => { const x = new Date(d+'T00:00:00'); return x.toLocaleDateString([], {day:'2-digit', month:'short', year:'numeric'}); };
+      if ((row.leave_type || '') === 'Half Day' || row.start_date === row.end_date) return fmt(row.start_date);
+      return fmt(row.start_date)+' – '+fmt(row.end_date);
+    },
+    leaveDaysLabel(days) {
+      const n = Number(days);
+      if (n === 0.5) return '0.5';
+      return Number.isInteger(n) ? String(n) : String(n);
+    },
+    leaveSubmittedLabel(ts) {
+      if (!ts) return '';
+      return new Date(String(ts).replace(' ','T')).toLocaleDateString([], {day:'2-digit', month:'short'});
+    },
+    async loadLeaves() {
+      try {
+        const r = await fetch('api/leave.php?action=list').then(r=>r.json());
+        if (!r.ok) { this.addToast(r.message||'Could not load leave','error'); return; }
+        this.leaveSummary = r.summary || this.leaveSummary;
+        this.leaves = r.data || [];
+        this.pendingLeaves = r.pendingCount || 0;
+        if (r.types && r.types.length) this.leaveTypes = r.types;
+      } catch { this.addToast('Could not load leave','error'); }
+    },
+    openLeaveForm() {
+      const today = new Date().toLocaleDateString('en-CA');
+      this.leaveForm = { leaveType: 'Casual Leave', startDate: today, endDate: today, reason: '' };
+      this.leaveErr = '';
+      this.$nextTick(() => {
+        const el = this.$refs.leaveStart;
+        if (el) { el.scrollIntoView({ behavior:'smooth', block:'center' }); el.focus(); }
+      });
+    },
+    async submitLeave() {
+      this.leaveErr = '';
+      if (!this.leaveForm.leaveType) { this.leaveErr = 'Please select a leave type.'; return; }
+      if (!this.leaveForm.startDate || !this.leaveForm.endDate) { this.leaveErr = 'Start and end dates are required.'; return; }
+      if (!this.leaveForm.reason.trim()) { this.leaveErr = 'Please add a reason for this leave.'; return; }
+      if (this._leaveSaving) return;
+      this._leaveSaving = true;
+      const r = await this.api('api/leave.php', { action:'request', leaveType:this.leaveForm.leaveType, startDate:this.leaveForm.startDate, endDate:this.leaveForm.endDate, reason:this.leaveForm.reason.trim() });
+      this._leaveSaving = false;
+      if (r.ok) {
+        const today = new Date().toLocaleDateString('en-CA');
+        this.leaveForm = { leaveType: 'Casual Leave', startDate: today, endDate: today, reason: '' };
+        this.leaveErr = '';
+        this.leaveFilter = 'all';
+        await this.loadLeaves();
+        this.addToast('Leave request submitted','success');
+      } else this.leaveErr = r.message || 'Could not submit request.';
+    },
+    exportLeaveCSV() {
+      const rows = this.filteredLeaves;
+      if (!rows.length) { this.addToast('No leave rows to download','error'); return; }
+      const hdr = ['Member','Type','From','To','Days','Reason','Status','Reviewed by','Requested'];
+      const body = rows.map(r => [
+        r.name, r.leave_type || 'Casual Leave', r.start_date, r.end_date, this.leaveDaysLabel(r.days),
+        r.reason, r.status, r.reviewed_by || '', r.created_at || ''
+      ]);
+      const csv = '\uFEFF'+[hdr,...body].map(r=>r.map(c=>'"'+String(c||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+      const a = Object.assign(document.createElement('a'), { href:'data:text/csv;charset=utf-8,'+encodeURIComponent(csv), download:'leave-'+(this.leaveMonth||'all')+'.csv' });
+      a.click();
+    },
+    openLeaveReject(row) {
+      this.leaveRejectFor = row;
+      this.leaveRejectNote = '';
+    },
+    async decideLeave(row, status) {
+      if (!row) return;
+      const note = status === 'rejected' ? (this.leaveRejectNote || '').trim() : '';
+      const r = await this.api('api/leave.php', { action:'decide', id: row.id, status, note });
+      if (r.ok) {
+        this.leaveRejectFor = null;
+        this.leaveRejectNote = '';
+        await this.loadLeaves();
+        this.addToast(status==='approved' ? 'Leave approved' : 'Leave declined', status==='approved'?'success':'info');
+      } else this.addToast(r.message||'Could not update request','error');
+    },
+    async cancelLeave(row) {
+      if (!confirm('Cancel this leave request?')) return;
+      const r = await this.api('api/leave.php', { action:'cancel', id: row.id });
+      if (r.ok) { await this.loadLeaves(); this.addToast('Request cancelled'); }
+      else this.addToast(r.message||'Could not cancel','error');
+    },
+
     // ── Follow-ups ──
     toggleInquiry(inq) {
       const opening = !inq._open;
@@ -3319,19 +4099,31 @@ function spApp() {
     },
 
     openFuForm(inq) {
-      this.fuOpenFor = this.fuOpenFor===inq.id ? null : inq.id;
+      this.fuOpenFor = inq;
       this.fuForm = { date: new Date().toLocaleDateString('en-CA'), time:'', note:'', assignedTo:'' };
     },
 
     async addFollowUp(inq) {
+      if (!inq) return;
       if (!this.fuForm.note.trim() || !this.fuForm.date) { this.addToast('Note and date are required','error'); return; }
-      const r = await this.api('api/followup.php',{action:'add',inquiryId:inq.id,note:this.fuForm.note,date:this.fuForm.date,time:this.fuForm.time||null,assignedTo:this.fuForm.assignedTo||this.currentUser});
+      const assignedTo = this.fuForm.assignedTo || this.currentUser;
+      const r = await this.api('api/followup.php',{action:'add',inquiryId:inq.id,note:this.fuForm.note,date:this.fuForm.date,time:this.fuForm.time||null,assignedTo});
       if (r.ok) {
         this.fuOpenFor = null;
+        const fu = {id:r.id,inquiry_id:inq.id,note:this.fuForm.note,follow_up_date:this.fuForm.date,follow_up_time:this.fuForm.time||null,assigned_to:assignedTo,client:inq.client||'',company:inq.company||'',completed:0,created_by:this.currentUser};
+        this._pushDashboardFu(fu);
         delete this.followUps[inq.id];
         await this.loadFollowUps(inq);
         this.addToast('Follow-up scheduled','success');
       } else this.addToast(r.message||'Error','error');
+    },
+
+    _pushDashboardFu(fu) {
+      this.rmFollowUps = [...this.rmFollowUps, fu];
+      const today = new Date().toLocaleDateString('en-CA');
+      if (!fu.completed && fu.assigned_to === this.currentUser && fu.follow_up_date <= today) {
+        this.todayFollowUps = [fu, ...this.todayFollowUps];
+      }
     },
 
     async completeFollowUp(fu, inq) {
@@ -3392,6 +4184,13 @@ function spApp() {
 
     get todayStr() { return new Date().toLocaleDateString('en-CA'); },
 
+    _isCreatedToday(inq) {
+      const today = this.todayStr;
+      if (inq.created_at && String(inq.created_at).slice(0,10) === today) return true;
+      const d = new Date(inq.date);
+      return !isNaN(d) && d.toLocaleDateString('en-CA') === today;
+    },
+
 
     fuStatus(fu) {
       const t = new Date().toLocaleDateString('en-CA');
@@ -3405,7 +4204,7 @@ function spApp() {
       const r = await fetch('api/followup.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'complete',id:fu.id})}).then(r=>r.json());
       if (r.ok) {
         const f = this.rmFollowUps.find(f=>f.id===fu.id);
-        if (f) f.completed = 1; // keep in list — shows under History filter
+        if (f) f.completed = 1; // keep in list  shows under History filter
         this.todayFollowUps = this.todayFollowUps.filter(f=>f.id!==fu.id);
         if (Array.isArray(this.followUps[fu.inquiry_id])) {
           const fi = this.followUps[fu.inquiry_id].find(f=>f.id===fu.id);
@@ -3434,7 +4233,7 @@ function spApp() {
       const r = await fetch('api/followup.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
       if (r.ok) {
         const inq = this.inquiries.find(i=>i.id===this.rmAddForm.inquiryId)||{};
-        this.rmFollowUps.push({id:r.id,inquiry_id:this.rmAddForm.inquiryId,note:this.rmAddForm.note,follow_up_date:this.rmAddForm.date,follow_up_time:this.rmAddForm.time||null,assigned_to:assignedTo,client:inq.client||'',company:inq.company||'',completed:0,created_by:this.currentUser});
+        this._pushDashboardFu({id:r.id,inquiry_id:this.rmAddForm.inquiryId,note:this.rmAddForm.note,follow_up_date:this.rmAddForm.date,follow_up_time:this.rmAddForm.time||null,assigned_to:assignedTo,client:inq.client||'',company:inq.company||'',completed:0,created_by:this.currentUser});
         delete this.followUps[this.rmAddForm.inquiryId];
         this.rmAddOpen = false;
         this.rmAddForm = {inquiryId:'',note:'',date:new Date().toLocaleDateString('en-CA'),time:'',assignedTo:''};

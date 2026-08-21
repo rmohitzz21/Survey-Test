@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   role          VARCHAR(50)   NOT NULL DEFAULT 'Member',
   status        ENUM('approved','pending','rejected','blocked') NOT NULL DEFAULT 'pending',
   requested_at  DATE          NOT NULL,
+  last_seen_at  TIMESTAMP     NULL,
   INDEX idx_name (name)
 );
 
@@ -110,6 +111,60 @@ CREATE TABLE IF NOT EXISTS notifications (
   FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
 );
 
+-- ─── Messages ────────────────────────────────────────────────────────────────
+-- Direct messages between any account and a team member (Admin/Member/Master Admin).
+
+CREATE TABLE IF NOT EXISTS messages (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  sender_id   INT       NOT NULL,
+  receiver_id INT       NOT NULL,
+  body        TEXT      NOT NULL,
+  attachment  VARCHAR(255) NULL,
+  is_read     TINYINT(1) NOT NULL DEFAULT 0,
+  created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (sender_id) REFERENCES accounts(id) ON DELETE CASCADE,
+  FOREIGN KEY (receiver_id) REFERENCES accounts(id) ON DELETE CASCADE,
+  INDEX idx_conversation (sender_id, receiver_id, created_at)
+);
+
+-- ─── Announcements ───────────────────────────────────────────────────────────
+-- Broadcast messages: only Admin/Master Admin post, all approved accounts can read.
+
+CREATE TABLE IF NOT EXISTS announcements (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  created_by VARCHAR(100) NOT NULL,
+  body       TEXT         NOT NULL,
+  created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- One row per account — last time they opened the Announcements page.
+CREATE TABLE IF NOT EXISTS announcement_reads (
+  account_id   INT       PRIMARY KEY,
+  last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+-- ─── Leave requests ──────────────────────────────────────────────────────────
+-- Members submit leave; Admin / Master Admin approve or decline.
+
+CREATE TABLE IF NOT EXISTS leave_requests (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  account_id  INT         NOT NULL,
+  leave_type  VARCHAR(40) NOT NULL DEFAULT 'Casual Leave',
+  start_date  DATE        NOT NULL,
+  end_date    DATE        NOT NULL,
+  days        DECIMAL(4,1) NOT NULL,
+  reason      TEXT        NOT NULL,
+  status      ENUM('pending','approved','rejected','cancelled') NOT NULL DEFAULT 'pending',
+  reviewed_by VARCHAR(100) NULL,
+  reviewed_at TIMESTAMP   NULL,
+  review_note VARCHAR(255) NULL,
+  created_at  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+  INDEX idx_leave_account (account_id, status),
+  INDEX idx_leave_status (status)
+);
+
 -- ─── Seed Accounts ───────────────────────────────────────────────────────────
 -- One per role, all approved so they can log in immediately.
 -- To regenerate a hash: php -r "echo password_hash('yourpassword', PASSWORD_DEFAULT);"
@@ -135,3 +190,16 @@ INSERT INTO accounts (name, email, password_hash, role, status, requested_at) VA
 -- ALTER TABLE stage_history ADD COLUMN final_remark TEXT NULL AFTER remark;
 -- 2026-08-12
 -- ALTER TABLE inquiries ADD COLUMN inquiry_type VARCHAR(20) NOT NULL DEFAULT 'Client Project' AFTER date;
+-- 2026-08-17
+-- CREATE TABLE messages (see above) — run the block above directly on existing DBs.
+-- 2026-08-21
+-- ALTER TABLE inquiries ADD COLUMN team_remark TEXT NULL AFTER admin_remark;
+-- ALTER TABLE inquiries ADD COLUMN team_remark_by VARCHAR(100) NULL AFTER team_remark;
+-- CREATE TABLE announcements, announcement_reads (see above) — same.
+-- ALTER TABLE messages ADD COLUMN attachment VARCHAR(255) NULL AFTER body;
+-- ALTER TABLE accounts ADD COLUMN last_seen_at TIMESTAMP NULL AFTER requested_at;
+-- 2026-08-19
+-- CREATE TABLE leave_requests (see above) — run the block above directly on existing DBs.
+-- ALTER TABLE leave_requests ADD COLUMN leave_type VARCHAR(40) NOT NULL DEFAULT 'Casual Leave' AFTER account_id;
+-- ALTER TABLE leave_requests MODIFY days DECIMAL(4,1) NOT NULL;
+-- leave_type values: Casual Leave, Half Day, Sick Leave, Emergency Leave, WFH

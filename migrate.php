@@ -68,6 +68,8 @@ try {
         website        VARCHAR(255),
         email_subject  VARCHAR(255),
         admin_remark   TEXT,
+        team_remark    TEXT,
+        team_remark_by VARCHAR(100),
         created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $results[] = ['ok', 'inquiries — table ready ✓'];
@@ -177,6 +179,70 @@ try {
     $results[] = ['err', 'follow_ups — ERROR: '.$e->getMessage()];
 }
 
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS messages (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        sender_id   INT       NOT NULL,
+        receiver_id INT       NOT NULL,
+        body        TEXT      NOT NULL,
+        attachment  VARCHAR(255) NULL,
+        is_read     TINYINT(1) NOT NULL DEFAULT 0,
+        created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (sender_id) REFERENCES accounts(id) ON DELETE CASCADE,
+        FOREIGN KEY (receiver_id) REFERENCES accounts(id) ON DELETE CASCADE,
+        INDEX idx_conversation (sender_id, receiver_id, created_at)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $results[] = ['ok', 'messages — table ready ✓'];
+} catch (Exception $e) {
+    $results[] = ['err', 'messages — ERROR: '.$e->getMessage()];
+}
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS announcements (
+        id         INT AUTO_INCREMENT PRIMARY KEY,
+        created_by VARCHAR(100) NOT NULL,
+        body       TEXT         NOT NULL,
+        created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $results[] = ['ok', 'announcements — table ready ✓'];
+} catch (Exception $e) {
+    $results[] = ['err', 'announcements — ERROR: '.$e->getMessage()];
+}
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS announcement_reads (
+        account_id   INT       PRIMARY KEY,
+        last_seen_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $results[] = ['ok', 'announcement_reads — table ready ✓'];
+} catch (Exception $e) {
+    $results[] = ['err', 'announcement_reads — ERROR: '.$e->getMessage()];
+}
+
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS leave_requests (
+        id          INT AUTO_INCREMENT PRIMARY KEY,
+        account_id  INT         NOT NULL,
+        leave_type  VARCHAR(40) NOT NULL DEFAULT 'Casual Leave',
+        start_date  DATE        NOT NULL,
+        end_date    DATE        NOT NULL,
+        days        DECIMAL(4,1) NOT NULL,
+        reason      TEXT        NOT NULL,
+        status      ENUM('pending','approved','rejected','cancelled') NOT NULL DEFAULT 'pending',
+        reviewed_by VARCHAR(100) NULL,
+        reviewed_at TIMESTAMP   NULL,
+        review_note VARCHAR(255) NULL,
+        created_at  TIMESTAMP   NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+        INDEX idx_leave_account (account_id, status),
+        INDEX idx_leave_status (status)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $results[] = ['ok', 'leave_requests — table ready ✓'];
+} catch (Exception $e) {
+    $results[] = ['err', 'leave_requests — ERROR: '.$e->getMessage()];
+}
+
 // ── Column migrations (ALTER — skipped if column already exists) ──────────────
 
 $migrations = [
@@ -188,7 +254,12 @@ $migrations = [
     ['table'=>'inquiries',     'column'=>'designation',      'sql'=>"ALTER TABLE inquiries ADD COLUMN designation VARCHAR(150) NULL AFTER client"],
     ['table'=>'inquiries',     'column'=>'email_subject',    'sql'=>"ALTER TABLE inquiries ADD COLUMN email_subject VARCHAR(255) NULL AFTER website"],
     ['table'=>'inquiries',     'column'=>'admin_remark',     'sql'=>"ALTER TABLE inquiries ADD COLUMN admin_remark TEXT NULL"],
+    ['table'=>'inquiries',     'column'=>'team_remark',      'sql'=>"ALTER TABLE inquiries ADD COLUMN team_remark TEXT NULL AFTER admin_remark"],
+    ['table'=>'inquiries',     'column'=>'team_remark_by',   'sql'=>"ALTER TABLE inquiries ADD COLUMN team_remark_by VARCHAR(100) NULL AFTER team_remark"],
     ['table'=>'inquiries',     'column'=>'inquiry_type',     'sql'=>"ALTER TABLE inquiries ADD COLUMN inquiry_type VARCHAR(20) NOT NULL DEFAULT 'Client Project' AFTER date"],
+    ['table'=>'messages',      'column'=>'attachment',       'sql'=>"ALTER TABLE messages ADD COLUMN attachment VARCHAR(255) NULL AFTER body"],
+    ['table'=>'accounts',      'column'=>'last_seen_at',     'sql'=>"ALTER TABLE accounts ADD COLUMN last_seen_at TIMESTAMP NULL AFTER requested_at"],
+    ['table'=>'leave_requests', 'column'=>'leave_type',       'sql'=>"ALTER TABLE leave_requests ADD COLUMN leave_type VARCHAR(40) NOT NULL DEFAULT 'Casual Leave' AFTER account_id"],
 ];
 
 foreach ($migrations as $m) {
@@ -205,6 +276,14 @@ foreach ($migrations as $m) {
         $results[] = ['err', $m['table'].'.'.$m['column'].' — ERROR: '.$e->getMessage()];
     }
 }
+
+try {
+    $pdo->exec("ALTER TABLE leave_requests MODIFY days DECIMAL(4,1) NOT NULL");
+    $results[] = ['ok', 'leave_requests.days — DECIMAL(4,1) for half-day ✓'];
+} catch (Exception $e) {
+    $results[] = ['err', 'leave_requests.days — ERROR: '.$e->getMessage()];
+}
+$results[] = ['ok', 'leave types — Casual Leave, Half Day, Sick Leave, Emergency Leave, WFH ✓'];
 
 // ── Index migrations (skipped if index already exists) ────────────────────────
 
