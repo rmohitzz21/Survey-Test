@@ -97,6 +97,25 @@ body.dark-mode input[readonly],
 body.dark-mode .cursor-not-allowed{background:#0F1319!important;color:#6B7685!important;}
 body.dark-mode ::-webkit-scrollbar-thumb{background:#2A323D;}
 
+/* Inquiry month grid (raw classes, not utilities — needs its own overrides) */
+body.dark-mode .cal-cell{background:#151B23;border-color:#2A323D;}
+body.dark-mode .cal-cell:hover{background:#1E2630;border-color:#39424F;}
+body.dark-mode .cal-cell.is-weekend{background:#12171E;}
+body.dark-mode .cal-cell.is-weekend:hover{background:#1E2630;}
+body.dark-mode .cal-cell.has-inq{background:#12291F;border-color:#1F5138;}
+body.dark-mode .cal-cell.has-inq:hover{background:#183527;border-color:#2A6B4A;}
+body.dark-mode .cal-cell.has-inq .cal-pill{background:#2F9E63;color:#04140C;}
+body.dark-mode .cal-cell.is-today{border-color:#5B9BFF;}
+body.dark-mode .cal-cell.is-sel{background:#16223A;border-color:#5B9BFF;box-shadow:0 0 0 2px rgba(91,155,255,.25);}
+body.dark-mode .cal-num{color:#C6CDD8;}
+body.dark-mode .cal-cell.is-today .cal-num{background:#1268F3;color:#fff;}
+body.dark-mode .cal-cell.is-sel .cal-num{color:#6DA8FF;}
+body.dark-mode .cal-cell.is-sel.is-today .cal-num{color:#fff;}
+body.dark-mode .cal-pill{background:#0F2B20;color:#4ADE80;}
+body.dark-mode .cal-pill.is-fu{background:#332913;color:#FBBF24;}
+body.dark-mode .cal-head{color:#6B7685;}
+body.dark-mode .cal-head.is-weekend{color:#4A5462;}
+
 /* Flatpickr popup (appended to <body>, so this reaches it) */
 body.dark-mode .flatpickr-calendar{background:#151B23!important;border-color:#2A323D!important;box-shadow:0 8px 32px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3)!important;}
 body.dark-mode .flatpickr-day{color:#C6CDD8!important;}

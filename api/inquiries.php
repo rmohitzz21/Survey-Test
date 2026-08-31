@@ -38,8 +38,11 @@ try {
     }
 
     $ins = $pdo->prepare("INSERT INTO inquiries
-        (id,date,inquiry_type,client,designation,company,country,is_new,client_type,requirement,created_by,current_owner,due_date,stage,outcome,proposal_value,email,secondary_email,phone,website,email_subject)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,'Inquiry Received','In Progress',?,?,?,?,?,?)");
+        (id,date,inquiry_type,client,designation,company,country,is_new,client_type,requirement,created_by,current_owner,due_date,due_time,stage,outcome,proposal_value,email,secondary_email,phone,website,email_subject)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,'Inquiry Received','In Progress',?,?,?,?,?,?)");
+
+    // 'HH:MM' 24h only — anything else is stored as NULL (= due at end of due_date)
+    $dueTime = preg_match('/^\d{2}:\d{2}$/', $b['dueTime'] ?? '') ? $b['dueTime'] : null;
 
     // Retry up to 3 times on duplicate ID (concurrent inserts)
     $id = null;
@@ -51,7 +54,7 @@ try {
                 $client, $b['designation'] ?? '', $company, $b['country'] ?? 'India',
                 $clientType === 'New' ? 1 : 0, $clientType,
                 $b['requirement'] ?? '', $createdBy, $b['assignTo'] ?? $createdBy,
-                $b['dueDate'] ?? 'TBD', $b['proposalValue'] ?? '', $b['email'] ?? '', $b['emailSecondary'] ?? '', $b['phone'] ?? '', $b['website'] ?? '', $b['emailSubject'] ?? '',
+                $b['dueDate'] ?? 'TBD', $dueTime, $b['proposalValue'] ?? '', $b['email'] ?? '', $b['emailSecondary'] ?? '', $b['phone'] ?? '', $b['website'] ?? '', $b['emailSubject'] ?? '',
             ]);
             break;
         } catch (PDOException $e) {

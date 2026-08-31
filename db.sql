@@ -34,6 +34,7 @@ CREATE TABLE IF NOT EXISTS inquiries (
   created_by     VARCHAR(100) NOT NULL,
   current_owner  VARCHAR(100) NOT NULL,
   due_date       VARCHAR(20)  NOT NULL DEFAULT 'TBD',
+  due_time       VARCHAR(5)   NULL,          -- 'HH:MM' 24h; NULL = end of due_date
   stage          VARCHAR(100) NOT NULL DEFAULT 'Inquiry Received',
   outcome        VARCHAR(100) NOT NULL DEFAULT 'In Progress',
   outcome_reason VARCHAR(255),
@@ -203,3 +204,5 @@ INSERT INTO accounts (name, email, password_hash, role, status, requested_at) VA
 -- ALTER TABLE leave_requests ADD COLUMN leave_type VARCHAR(40) NOT NULL DEFAULT 'Casual Leave' AFTER account_id;
 -- ALTER TABLE leave_requests MODIFY days DECIMAL(4,1) NOT NULL;
 -- leave_type values: Casual Leave, Half Day, Sick Leave, Emergency Leave, WFH
+-- 2026-08-28
+-- ALTER TABLE inquiries ADD COLUMN due_time VARCHAR(5) NULL AFTER due_date;

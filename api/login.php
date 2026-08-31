@@ -48,4 +48,8 @@ $_SESSION['user'] = [
     'role'  => $user['role'],
 ];
 
+try {
+    $pdo->prepare("UPDATE accounts SET last_seen_at=NOW() WHERE id=?")->execute([(int)$user['id']]);
+} catch (Exception $e) { /* last_seen_at not migrated yet */ }
+
 json_response(['ok'=>true, 'name'=>$user['name'], 'role'=>$user['role']]);

@@ -21,6 +21,13 @@ if ($_host === 'localhost' || $_host === '127.0.0.1') {
 
 
 
+// Everything the portal does — created_at, overdue, "today's follow-ups", the month scope — is
+// business-day logic for one office in India, so pin PHP and MySQL to IST here rather than trusting
+// whatever php.ini or the host happens to be set to. Every entry point loads this file, so this is
+// the one place that has to be right. Offset, not 'Asia/Kolkata': named zones need MySQL's tz tables
+// loaded, which shared hosts often skip, and India has no DST so +05:30 is always correct.
+date_default_timezone_set('Asia/Kolkata');
+
 try {
     $pdo = new PDO(
         "mysql:host=".DB_HOST.";dbname=".DB_NAME.";charset=utf8mb4",
@@ -29,6 +36,7 @@ try {
             PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
             PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
             PDO::ATTR_EMULATE_PREPARES   => false,
+            PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+05:30'",
         ]
     );
 } catch (PDOException $e) {

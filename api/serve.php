@@ -35,6 +35,27 @@ if ($inquiryId) {
     exit;
 }
 
+// ── Message attachment ────────────────────────────────────────────────────────
+$msgId = (int)($_GET['msg_id'] ?? 0);
+if ($msgId) {
+    $user = current_user();
+    $stmt = $pdo->prepare("SELECT sender_id,receiver_id,attachment FROM messages WHERE id=?");
+    $stmt->execute([$msgId]);
+    $row = $stmt->fetch();
+    if (!$row || $row['attachment'] !== $filename) { http_response_code(404); exit('Not found'); }
+    if ((int)$row['sender_id'] !== (int)$user['id'] && (int)$row['receiver_id'] !== (int)$user['id']) {
+        http_response_code(403); exit('Forbidden');
+    }
+    $path = dirname(__DIR__).'/uploads/msg/'.$msgId.'/'.$filename;
+    if (!file_exists($path)) { http_response_code(404); exit('File missing'); }
+    $mime = mime_content_type($path) ?: 'application/octet-stream';
+    header('Content-Type: '.$mime);
+    header('Content-Disposition: attachment; filename="'.rawurlencode($filename).'"');
+    header('Content-Length: '.filesize($path));
+    readfile($path);
+    exit;
+}
+
 // ── Step attachment ───────────────────────────────────────────────────────────
 $stepId = (int)($_GET['step_id'] ?? 0);
 if (!$stepId) { http_response_code(400); exit('Bad request'); }

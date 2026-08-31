@@ -109,6 +109,22 @@ function load_notifications(PDO $pdo, int $account_id): array {
     return $rows;
 }
 
+// ─── Due date + time → timestamp ─────────────────────────────────────────────
+
+/**
+ * "15 Aug 2026" + "14:30" → unix ts. Returns null for TBD / unparseable.
+ * Steps store the time inline as "15 Aug 2026 · 03:00 PM" — strtotime chokes on
+ * the separator, so strip it. A due with no time means end of that day.
+ */
+function due_ts(?string $date, ?string $time = null): ?int {
+    $d = trim((string)$date);
+    if ($d === '' || strcasecmp($d, 'TBD') === 0) return null;
+    if (strpos($d, '·') !== false) $d = trim(str_replace('·', '', $d));
+    else                           $d .= ' ' . ($time ?: '23:59');
+    $ts = strtotime($d);
+    return $ts === false ? null : $ts;
+}
+
 // ─── Load inquiries with steps + history ─────────────────────────────────────
 
 function load_inquiries(PDO $pdo, ?array $user = null): array {
@@ -141,15 +157,15 @@ function load_inquiries(PDO $pdo, ?array $user = null): array {
         $steps = $pdo->prepare("SELECT s.*, NULL AS attachments FROM inquiry_steps s WHERE s.inquiry_id IN ($ph) ORDER BY s.id");
         $steps->execute($ids);
     }
-    $today          = strtotime('today');
-    $closedOutcomes = ['Payment Received','Completed','Cancelled'];
-    $closedStages   = ['Payment Received','Project Closed','Proposal Lost','Cancelled'];
+    $now            = time();
+    $closedOutcomes = ['Payment Received','Inquiry Closed','Completed','Lost','Cancelled'];
+    $closedStages   = ['Payment Received','Project Closed','Proposal Lost','Closure','Cancelled'];
 
     $stepsBy = [];
     foreach ($steps->fetchAll() as $row) {
         $row['attachments'] = $row['attachments'] ? explode('||', $row['attachments']) : [];
-        $dueTs = ($row['due'] && $row['due'] !== 'TBD') ? strtotime($row['due']) : false;
-        $row['overdue'] = (bool)($dueTs && $dueTs < $today && !in_array($row['status'], ['Done','Cancelled']));
+        $dueTs = due_ts($row['due']);
+        $row['overdue'] = ($dueTs !== null && $dueTs < $now && !in_array($row['status'], ['Done','Cancelled']));
         $stepsBy[$row['inquiry_id']][] = $row;
     }
 
@@ -164,9 +180,9 @@ function load_inquiries(PDO $pdo, ?array $user = null): array {
 
     foreach ($inqs as &$inq) {
         $inq['is_new'] = (bool)$inq['is_new'];
-        $dueTs = ($inq['due_date'] && $inq['due_date'] !== 'TBD') ? strtotime($inq['due_date']) : false;
+        $dueTs = due_ts($inq['due_date'], $inq['due_time'] ?? null);
         // overdue computed here — not stored in DB
-        $inq['overdue'] = (bool)($dueTs && $dueTs < $today
+        $inq['overdue'] = ($dueTs !== null && $dueTs < $now
             && !in_array($inq['outcome'], $closedOutcomes)
             && !in_array($inq['stage'], $closedStages));
         $inq['steps']       = $stepsBy[$inq['id']] ?? [];
@@ -188,5 +204,7 @@ function load_accounts(PDO $pdo): array {
 function next_inquiry_id(PDO $pdo): string {
     // Re-query inside the insert transaction to minimise race window
     $max = (int)$pdo->query("SELECT MAX(CAST(SUBSTRING_INDEX(id,'-',-1) AS UNSIGNED)) FROM inquiries")->fetchColumn();
-    return 'SP-2026-' . str_pad($max + 1, 3, '0', STR_PAD_LEFT);
+    // Year comes from the clock, not a literal — the sequence itself stays continuous across the
+    // year boundary (…SP-2026-041 → SP-2027-042), so an ID is never reused and stays sortable.
+    return 'SP-' . date('Y') . '-' . str_pad($max + 1, 3, '0', STR_PAD_LEFT);
 }

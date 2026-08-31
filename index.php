@@ -17,10 +17,17 @@ $_fuStmt  = $pdo->prepare("SELECT f.*,i.client,i.company FROM follow_ups f JOIN 
 $_fuStmt->execute([$_fuToday, $user['name']]);
 $todayFollowUps = $_fuStmt->fetchAll();
 
-// All follow-ups for Reminders view
-$_rmStmt = $pdo->prepare("SELECT f.*,i.client,i.company FROM follow_ups f JOIN inquiries i ON i.id=f.inquiry_id WHERE f.assigned_to=? OR f.created_by=? ORDER BY f.completed ASC,f.follow_up_date ASC,f.follow_up_time ASC");
-$_rmStmt->execute([$user['name'], $user['name']]);
-$allFollowUps = $_rmStmt->fetchAll();
+// All follow-ups for Reminders view. Admins also get everyone else's so the calendar's
+// user picker works; the Reminders view narrows back to its own rows client-side.
+$_rmSql = "SELECT f.*,i.client,i.company FROM follow_ups f JOIN inquiries i ON i.id=f.inquiry_id";
+$_rmOrd = " ORDER BY f.completed ASC,f.follow_up_date ASC,f.follow_up_time ASC";
+if (is_admin()) {
+    $allFollowUps = $pdo->query($_rmSql.$_rmOrd)->fetchAll();
+} else {
+    $_rmStmt = $pdo->prepare($_rmSql." WHERE f.assigned_to=? OR f.created_by=?".$_rmOrd);
+    $_rmStmt->execute([$user['name'], $user['name']]);
+    $allFollowUps = $_rmStmt->fetchAll();
+}
 foreach ($allFollowUps as &$_rfu) { $_rfu['completed'] = (int)$_rfu['completed']; } unset($_rfu);
 
 // All unique client names from every inquiry  for global autocomplete (not role-filtered)
@@ -92,6 +99,30 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
   .numInputWrapper:hover{background:#EEF4FF!important;border-radius:4px!important}
   .flatpickr-time input:focus,.flatpickr-time input:hover{background:#EEF4FF!important;outline:none!important}
   input.flatpickr-input::placeholder{color:#98A2B3!important}
+  /* ── Inquiry month grid ── */
+  .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
+  .cal-head{font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#98A2B3;text-align:center;padding-bottom:6px}
+  .cal-head.is-weekend{color:#C4CAD4}
+  .cal-cell{position:relative;width:100%;min-height:54px;border-radius:10px;border:1px solid #E4E7EC;background:#fff;padding:6px;display:flex;flex-direction:column;align-items:flex-start;gap:4px;transition:background .15s,border-color .15s,box-shadow .15s}
+  .cal-cell:hover{background:#F9FAFB;border-color:#D1D9E6}
+  .cal-cell.is-weekend{background:#FBFCFD}
+  .cal-cell.is-weekend:hover{background:#F5F7FA}
+  /* A day that created inquiries turns the whole box green — after .is-weekend so it wins on
+     Sat/Sun, before .is-sel so clicking a day still reads as selected. */
+  .cal-cell.has-inq{background:#ECFDF3;border-color:#A6F4C5}
+  .cal-cell.has-inq:hover{background:#D1FADF;border-color:#6CE9A6}
+  .cal-cell.has-inq .cal-pill{background:#16803C;color:#fff}
+  .cal-cell.is-today{border-color:#1268F3}
+  .cal-cell.is-sel{border-color:#1268F3;background:#EEF4FF;box-shadow:0 0 0 2px rgba(18,104,243,.16)}
+  .cal-num{font-size:12px;font-weight:700;color:#344054;line-height:18px;min-width:18px;text-align:center}
+  .cal-cell.is-today .cal-num{color:#fff;background:#1268F3;border-radius:999px;height:18px}
+  .cal-cell.is-sel .cal-num{color:#175CD3}
+  .cal-cell.is-sel.is-today .cal-num{color:#fff}
+  .cal-marks{display:flex;flex-wrap:wrap;align-items:center;gap:3px}
+  .cal-pill{display:inline-flex;align-items:center;gap:2px;font-size:10px;font-weight:800;line-height:1;padding:3px 6px;border-radius:999px;background:#ECFDF3;color:#16803C;white-space:nowrap}
+  .cal-pill.is-fu{background:#FFFAEB;color:#B54708}
+  .cal-pill svg{width:9px;height:9px}
+  @media(min-width:640px){.cal-grid{gap:7px}.cal-cell{min-height:76px;padding:8px}.cal-num{font-size:13px}}
   /* ── Rich text editor ── */
   .rich-editor:empty::before{content:attr(data-placeholder);color:#98A2B3;pointer-events:none;display:block}
   .rich-editor b,.rich-editor strong{font-weight:700}
@@ -101,18 +132,20 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
   .rich-editor ol{list-style:decimal!important;padding-left:1.4em!important;margin:0.2em 0}
   .rich-editor li{display:list-item!important;margin:0.1em 0}
   .rich-editor a{color:#1268F3;text-decoration:underline}
-  /* ── Inquiry Excel grid ── */
-  .inq-col-header { display:none }
-  .inq-card-label { display:block }
-  .inq-row { flex-wrap:wrap; align-items:stretch }
+  /* ── Inquiry Excel grid (always desktop table format; wrapper scrolls horizontally on narrow screens) ── */
+  .inq-col-header { display:flex; align-items:stretch }
+  .inq-card-label { display:none }
+  .inq-row { flex-wrap:nowrap; align-items:stretch }
   .inq-cell { display:flex; flex-direction:column; justify-content:center; padding:10px 12px; flex-shrink:0; overflow:hidden; border-right:1px solid #E4E7EC }
-  @media (min-width:1280px) {
-    .inq-row { flex-wrap:nowrap }
-    .inq-col-header { display:flex; align-items:stretch }
-    .inq-card-label { display:none }
-  }
-  @media (max-width:1279px) {
-    .inq-cell { border-right:none; padding:3px 0; flex-direction:row; align-items:center; flex-wrap:wrap; gap:4px }
+  /* ── Dashboard stat tiles: smooth hover/press feedback ── */
+  .stat-tile { transition: box-shadow .15s ease, border-color .15s ease, transform .1s ease }
+  .stat-tile:hover { border-color: #C8D2DF }
+  .stat-tile:active { transform: scale(0.98) }
+  /* ── Messages: WhatsApp-style single-pane view on mobile (list <-> thread) ── */
+  .msg-list-pane { width:220px }
+  @media (max-width:767px) {
+    .msg-list-pane { width:100% }
+    .msg-list-pane.msg-hide, .msg-thread-pane.msg-hide { display:none }
   }
   @media print {
     body > *:not(#summary-print-area) { display:none!important; }
@@ -209,6 +242,15 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
       </span>
       <span x-show="!collapsed" class="flex-1 text-left">Messages</span>
       <span x-show="!collapsed && unreadMessages>0" class="text-[9px] font-extrabold px-1.5 py-0.5 rounded-full bg-[#FEF3F2] text-[#B42318]" x-text="unreadMessages"></span>
+    </button>
+
+    <!-- Calendar -->
+    <button @click="view='calendar'" :title="collapsed ? 'Calendar' : undefined"
+            class="w-full flex items-center gap-3 py-2.5 text-[12px] font-semibold transition-colors relative"
+            :class="[view==='calendar' ? 'bg-[#EEF4FF] text-[#175CD3]' : 'text-[#344054] hover:bg-[#F9FAFB]', collapsed ? 'justify-center px-0' : 'px-4']">
+      <span x-show="view==='calendar' && !collapsed" class="absolute left-0 top-1 bottom-1 w-[3px] bg-[#1268F3] rounded-r-full"></span>
+      <svg class="w-4 h-4 shrink-0"><use href="#icon-calendar"/></svg>
+      <span x-show="!collapsed" class="flex-1 text-left">Calendar</span>
     </button>
 
     <!-- Announcements -->
@@ -369,36 +411,84 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
           </div>
       </div>
 
-      <!-- Stats bar (5 tiles clickable filters) -->
-      <div class="grid grid-cols-5 gap-3 mb-4">
-        <button type="button" @click="statFilter=''" class="bg-white rounded-[10px] border border-[#E4E7EC] px-4 py-3 text-left w-full cursor-pointer"
-          :style="statFilter==='' ? 'box-shadow:0 0 0 2px #667085' : 'box-shadow:0 1px 4px rgba(7,29,43,0.04)'">
+      <!-- Month dropdown — every month that has inquiries, newest first. Nothing is ever deleted:
+           picking an older month just re-scopes the stats, list and pagination to it. -->
+      <div class="flex items-center gap-2 mb-3">
+        <div class="relative shrink-0" x-data="{open:false}">
+          <button type="button" @click="open=!open" @click.outside="open=false"
+                  class="flex items-center gap-2 pl-3 pr-2.5 py-1.5 rounded-[8px] border bg-white text-[12px] font-semibold hover:bg-[#F9FAFB] transition-colors"
+                  :class="inqMonth===todayStr.slice(0,7) ? 'border-[#E4E7EC] text-[#344054]' : 'border-[#1268F3] text-[#175CD3]'"
+                  style="min-width:190px">
+            <svg class="w-3.5 h-3.5 text-[#98A2B3] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            <span class="flex-1 text-left" x-text="inqMonth ? monthLabel(inqMonth) : 'All months'"></span>
+            <span class="text-[11px] text-[#98A2B3] tabular-nums" x-text="monthInquiries.length"></span>
+            <span x-show="otherMonthsOpen>0" title="Open inquiries in other months — open this list to reach them"
+                  class="text-[9px] font-extrabold tabular-nums text-[#B54708] bg-[#FFFAEB] px-1.5 py-0.5 rounded-full shrink-0" x-text="otherMonthsOpen"></span>
+            <svg class="w-3.5 h-3.5 text-[#98A2B3] transition-transform shrink-0" :class="open?'rotate-180':''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+
+          <div x-show="open" x-transition:enter="transition ease-out duration-100" x-transition:enter-start="opacity-0 scale-95" x-transition:enter-end="opacity-100 scale-100"
+               class="absolute left-0 top-full mt-1.5 bg-white border border-[#E4E7EC] rounded-[10px] py-1 z-30 w-[230px] overflow-y-auto"
+               style="box-shadow:0 8px 24px rgba(7,29,43,0.10);max-height:320px">
+            <template x-for="m in monthTabs" :key="m.key">
+              <button type="button" @click="inqMonth=m.key; _inqPage=0; open=false"
+                      class="w-full flex items-center gap-2.5 px-3.5 py-2 text-[12px] font-semibold text-left transition-colors hover:bg-[#F9FAFB]"
+                      :class="inqMonth===m.key ? 'text-[#172B3A] bg-[#F2F4F7]' : 'text-[#344054]'">
+                <span class="flex-1" x-text="m.label"></span>
+                <span x-show="m.key===todayStr.slice(0,7)" class="text-[9px] font-extrabold uppercase tracking-[0.04em] text-[#175CD3] bg-[#EEF4FF] px-1.5 py-0.5 rounded-full shrink-0">Now</span>
+                <span x-show="m.open>0 && m.key!==todayStr.slice(0,7)" title="Still open in this month — pick it to close them"
+                      class="text-[9px] font-extrabold tabular-nums text-[#B54708] bg-[#FFFAEB] px-1.5 py-0.5 rounded-full shrink-0" x-text="m.open+' open'"></span>
+                <span class="text-[11px] text-[#98A2B3] tabular-nums" x-text="m.count"></span>
+                <svg x-show="inqMonth===m.key" class="w-3 h-3 text-[#1268F3] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              </button>
+            </template>
+            <div class="h-px bg-[#E4E7EC] my-1"></div>
+            <button type="button" @click="inqMonth=''; _inqPage=0; open=false"
+                    class="w-full flex items-center gap-2.5 px-3.5 py-2 text-[12px] font-semibold text-left transition-colors hover:bg-[#F9FAFB]"
+                    :class="!inqMonth ? 'text-[#172B3A] bg-[#F2F4F7]' : 'text-[#344054]'">
+              <span class="flex-1">All months</span>
+              <span class="text-[11px] text-[#98A2B3] tabular-nums" x-text="visibleInquiries.length"></span>
+              <svg x-show="!inqMonth" class="w-3 h-3 text-[#1268F3] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            </button>
+          </div>
+        </div>
+        <button type="button" x-show="inqMonth!==todayStr.slice(0,7)" @click="inqMonth=todayStr.slice(0,7); _inqPage=0"
+                class="text-[11px] font-bold px-3 py-1.5 rounded-[8px] bg-[#EEF4FF] text-[#175CD3] hover:bg-[#1268F3] hover:text-white transition-colors shrink-0">Back to this month</button>
+      </div>
+
+      <!-- Stats bar (4 tiles clickable filters) -->
+      <div class="overflow-x-auto" style="-webkit-overflow-scrolling:touch;padding:3px;margin:-3px -3px 13px -3px">
+      <div class="grid gap-3" style="min-width:560px;grid-template-columns:repeat(4,minmax(0,1fr))">
+        <button type="button" @click="statFilter=''" class="stat-tile bg-white rounded-[10px] border border-[#E4E7EC] px-4 py-3 text-left w-full cursor-pointer"
+          :style="statFilter==='' ? 'border-color:transparent;box-shadow:0 0 0 2px #667085' : 'box-shadow:0 1px 4px rgba(7,29,43,0.04)'">
           <div class="flex items-center gap-1.5 mb-1"><div class="w-1.5 h-1.5 rounded-full bg-[#667085]"></div><div class="text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085]">Total Inquiries</div></div>
           <div class="text-[28px] font-bold leading-none text-[#172B3A]" x-text="stats.total"></div>
         </button>
-        <button type="button" @click="statFilter = statFilter==='inProgress' ? '' : 'inProgress'" class="bg-white rounded-[10px] border border-[#E4E7EC] px-4 py-3 text-left w-full cursor-pointer"
-          :style="statFilter==='inProgress' ? 'box-shadow:0 0 0 2px #1268F3' : 'box-shadow:0 1px 4px rgba(7,29,43,0.04)'">
+        <button type="button" @click="statFilter = statFilter==='inProgress' ? '' : 'inProgress'" class="stat-tile bg-white rounded-[10px] border border-[#E4E7EC] px-4 py-3 text-left w-full cursor-pointer"
+          :style="statFilter==='inProgress' ? 'border-color:transparent;box-shadow:0 0 0 2px #1268F3' : 'box-shadow:0 1px 4px rgba(7,29,43,0.04)'">
           <div class="flex items-center gap-1.5 mb-1"><div class="w-1.5 h-1.5 rounded-full bg-[#1268F3]"></div><div class="text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085]">In Progress</div></div>
           <div class="text-[28px] font-bold leading-none text-[#172B3A]" x-text="stats.inProgress"></div>
         </button>
-        <button type="button" @click="statFilter = statFilter==='done' ? '' : 'done'" class="bg-white rounded-[10px] border border-[#E4E7EC] px-4 py-3 text-left w-full cursor-pointer"
-          :style="statFilter==='done' ? 'box-shadow:0 0 0 2px #16803C' : 'box-shadow:0 1px 4px rgba(7,29,43,0.04)'">
+        <button type="button" @click="statFilter = statFilter==='done' ? '' : 'done'" class="stat-tile bg-white rounded-[10px] border border-[#E4E7EC] px-4 py-3 text-left w-full cursor-pointer"
+          :style="statFilter==='done' ? 'border-color:transparent;box-shadow:0 0 0 2px #16803C' : 'box-shadow:0 1px 4px rgba(7,29,43,0.04)'">
           <div class="flex items-center gap-1.5 mb-1"><div class="w-1.5 h-1.5 rounded-full bg-[#16803C]"></div><div class="text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085]">Closed</div></div>
           <div class="text-[28px] font-bold leading-none text-[#172B3A]" x-text="stats.done"></div>
         </button>
-        <button type="button" @click="statFilter = statFilter==='overdue' ? '' : 'overdue'" class="bg-white rounded-[10px] border border-[#E4E7EC] px-4 py-3 text-left w-full cursor-pointer"
-          :style="statFilter==='overdue' ? 'box-shadow:0 0 0 2px #B42318' : (stats.overdue>0 ? 'box-shadow:0 1px 4px rgba(7,29,43,0.04);border-color:'+(darkMode?'#5C2323':'#FECDCA') : 'box-shadow:0 1px 4px rgba(7,29,43,0.04)')">
+        <button type="button" @click="statFilter = statFilter==='overdue' ? '' : 'overdue'" class="stat-tile bg-white rounded-[10px] border border-[#E4E7EC] px-4 py-3 text-left w-full cursor-pointer"
+          :style="statFilter==='overdue' ? 'border-color:transparent;box-shadow:0 0 0 2px #B42318' : (stats.overdue>0 ? 'box-shadow:0 1px 4px rgba(7,29,43,0.04);border-color:'+(darkMode?'#5C2323':'#FECDCA') : 'box-shadow:0 1px 4px rgba(7,29,43,0.04)')">
           <div class="flex items-center gap-1.5 mb-1"><div class="w-1.5 h-1.5 rounded-full bg-[#B42318]"></div><div class="text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085]">Overdue</div></div>
           <div class="text-[28px] font-bold leading-none" :style="stats.overdue>0?'color:#B42318':'color:#172B3A'" x-text="stats.overdue"></div>
         </button>
       </div>
+      </div>
 
       <!-- Filter bar -->
-      <div class="bg-white rounded-[10px] border border-[#E4E7EC] px-4 py-3 mb-4 flex flex-wrap items-center gap-2" style="box-shadow:0 1px 4px rgba(7,29,43,0.04)">
+      <div class="overflow-x-auto mb-4" style="-webkit-overflow-scrolling:touch">
+      <div class="bg-white rounded-[10px] border border-[#E4E7EC] px-4 py-3 flex items-center gap-2" style="box-shadow:0 1px 4px rgba(7,29,43,0.04);min-width:760px">
         <!-- Search -->
         <div class="flex items-center gap-2 border border-[#E4E7EC] rounded-[8px] px-2.5 flex-1 min-w-[180px]" style="height:38px">
           <svg class="w-3 h-3 text-[#667085] shrink-0"><use href="#icon-search"/></svg>
-          <input x-model="search" placeholder="Search by ID, client, company…" class="flex-1 text-[12px] text-[#172B3A] placeholder:text-[#667085] bg-transparent focus:outline-none" />
+          <input x-model="search" placeholder="Search ID, client, requirement, person, date…" title="Searches every field on the inquiry and its tasks. Multiple words must all match." class="flex-1 text-[12px] text-[#172B3A] placeholder:text-[#667085] bg-transparent focus:outline-none" />
           <button x-show="search" @click="search=''" class="text-[#667085]">✕</button>
         </div>
         <button @click="dateFilter = dateFilter==='today' ? '' : 'today'" class="text-[11px] font-bold px-3 rounded-[8px] transition-colors shrink-0" :class="dateFilter==='today'?'bg-[#1268F3] text-white':'bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC]'" style="height:38px">Today</button>
@@ -426,6 +516,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
         <div class="w-px h-5 bg-[#E4E7EC]"></div>
         <button @click="typeFilter = typeFilter==='Client Project' ? '' : 'Client Project'" class="text-[11px] font-bold px-3 rounded-[8px] transition-colors" :class="typeFilter==='Client Project'?'bg-[#1268F3] text-white':'bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC]'" style="height:34px">Client Project</button>
         <button @click="typeFilter = typeFilter==='Internal Usage' ? '' : 'Internal Usage'" class="text-[11px] font-bold px-3 rounded-[8px] transition-colors" :class="typeFilter==='Internal Usage'?'bg-[#1268F3] text-white':'bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC]'" style="height:34px">Internal Usage</button>
+      </div>
       </div>
 
       <!-- Active filter chips -->
@@ -468,7 +559,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
               <div class="inq-cell text-[10px] font-bold uppercase tracking-[0.06em] text-[#667085]" style="flex:1;min-width:50px" :style="{ maxWidth: (collapsed ? 260 : 120)+'px' }">Requirement</div>
               <div class="inq-cell text-[10px] font-bold uppercase tracking-[0.06em] text-[#667085]" style="width:92px">Created By</div>
               <div class="inq-cell text-[10px] font-bold uppercase tracking-[0.06em] text-[#667085]" style="width:108px">Currently With</div>
-              <div class="inq-cell text-[10px] font-bold uppercase tracking-[0.06em] text-[#667085]" style="width:80px">Due</div>
+              <div class="inq-cell text-[10px] font-bold uppercase tracking-[0.06em] text-[#667085]" style="width:118px">Due</div>
               <div class="inq-cell text-[10px] font-bold uppercase tracking-[0.06em] text-[#667085]" style="width:120px">Ownership status</div>
               <div class="inq-cell text-[10px] font-bold uppercase tracking-[0.06em] text-[#667085]" style="width:100px">Team Status</div>
               <div class="inq-cell text-[10px] font-bold uppercase tracking-[0.06em] text-[#667085]" style="width:140px;border-right:none">Actions</div>
@@ -483,7 +574,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                   <!-- # -->
                   <div class="inq-cell" style="width:40px;align-items:center;justify-content:center;flex-direction:row">
                     <div class="h-6 w-6 rounded-full flex items-center justify-center text-[10px] font-extrabold"
-                         :class="inq.overdue ? 'bg-[#EEF4FF] text-[#B42318]' : 'bg-[#EEF4FF] text-[#175CD3]'"
+                         :class="isOverdue(inq) ? 'bg-[#EEF4FF] text-[#B42318]' : 'bg-[#EEF4FF] text-[#175CD3]'"
                          x-text="_inqPage*15+i+1"></div>
                   </div>
                   <!-- Inquiry ID -->
@@ -504,8 +595,10 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                   <!-- Client Type -->
                   <div class="inq-cell" style="width:70px">
                     <div class="inq-card-label text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-0.5">Client Type</div>
-                    <span class="inline-flex mt-0.5 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full w-fit"
+                    <span class="inline-flex mt-0.5 text-[9px] font-extrabold px-1.5 py-0.5 rounded-full truncate"
+                          style="max-width:100%"
                           :class="inq.is_new ? 'bg-[#FFFAEB] text-[#B54708]' : 'bg-[#ECFDF3] text-[#16803C]'"
+                          :title="inq.client_type || 'New'"
                           x-text="inq.client_type || 'New'"></span>
                   </div>
                   <!-- Company -->
@@ -534,9 +627,12 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                     <div class="text-[11px] font-bold text-[#172B3A]" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis" x-text="inq.current_owner"></div>
                   </div>
                   <!-- Due -->
-                  <div class="inq-cell" style="width:80px">
+                  <div class="inq-cell" style="width:118px">
                     <div class="inq-card-label text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-0.5">Due</div>
-                    <div class="text-[11px]" :class="inq.overdue?'text-[#B42318] font-bold':'text-[#344054]'" x-text="inq.due_date"></div>
+                    <div class="text-[11px]" style="line-height:1.3" :class="isOverdue(inq)?'text-[#B42318] font-bold':'text-[#344054]'" x-text="dueLabel(inq)"></div>
+                    <span x-show="dueStatus(inq)!=='none'" class="inline-flex items-center rounded-full font-extrabold whitespace-nowrap px-1.5 py-0.5 text-[9px] w-fit mt-0.5"
+                          :class="dueStatus(inq)==='overdue'?'bg-[#FEF3F2] text-[#B42318]':dueStatus(inq)==='completed'?'bg-[#ECFDF3] text-[#16803C]':'bg-[#FFFAEB] text-[#B54708]'"
+                          x-text="dueStatus(inq)==='overdue'?'Overdue':dueStatus(inq)==='completed'?'Completed':'Pending'"></span>
                   </div>
                   <!-- Ownership status -->
                   <div class="inq-cell" style="width:120px">
@@ -1196,7 +1292,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                       :class="{'bg-[#1268F3]':rmFilter==='today','bg-[#B42318]':rmFilter==='overdue','bg-[#667085]':rmFilter==='upcoming','bg-[#98A2B3]':rmFilter==='all'||rmFilter==='done'}"></span>
                 <span class="flex-1 text-left"
                       x-text="rmFilter==='today'?'Today':rmFilter==='upcoming'?'Upcoming':rmFilter==='overdue'?'Overdue':'All'"></span>
-                <span class="text-[11px] text-[#98A2B3] tabular-nums" x-text="rmFilter==='done'?rmFollowUps.filter(f=>!f.completed).length:rmFiltered.length"></span>
+                <span class="text-[11px] text-[#98A2B3] tabular-nums" x-text="rmFilter==='done'?rmMine.filter(f=>!f.completed).length:rmFiltered.length"></span>
                 <svg class="w-3.5 h-3.5 text-[#98A2B3] transition-transform" :class="open?'rotate-180':''" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
 
@@ -1210,7 +1306,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                     <span class="w-2 h-2 rounded-full shrink-0" :style="'background:'+dot"></span>
                     <span class="flex-1" x-text="label"></span>
                     <span class="text-[11px] text-[#98A2B3] tabular-nums"
-                          x-text="key==='all'?rmFollowUps.filter(f=>!f.completed).length:key==='today'?rmFollowUps.filter(f=>!f.completed&&f.follow_up_date===new Date().toLocaleDateString('en-CA')).length:key==='upcoming'?rmFollowUps.filter(f=>!f.completed&&f.follow_up_date>new Date().toLocaleDateString('en-CA')).length:rmFollowUps.filter(f=>!f.completed&&f.follow_up_date<new Date().toLocaleDateString('en-CA')).length"></span>
+                          x-text="key==='all'?rmMine.filter(f=>!f.completed).length:key==='today'?rmMine.filter(f=>!f.completed&&f.follow_up_date===new Date().toLocaleDateString('en-CA')).length:key==='upcoming'?rmMine.filter(f=>!f.completed&&f.follow_up_date>new Date().toLocaleDateString('en-CA')).length:rmMine.filter(f=>!f.completed&&f.follow_up_date<new Date().toLocaleDateString('en-CA')).length"></span>
                     <svg x-show="rmFilter===key||(rmFilter==='done'&&key==='all')" class="w-3 h-3 text-[#1268F3] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                   </button>
                 </template>
@@ -1225,7 +1321,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
               History
               <span class="text-[10px] font-extrabold tabular-nums px-1.5 py-0.5 rounded-full"
                     :style="rmFilter==='done' ? 'background:rgba(255,255,255,0.2);color:#fff' : (darkMode ? 'background:#232A33;color:#6B7685' : 'background:#F2F4F7;color:#98A2B3')"
-                    x-text="rmFollowUps.filter(f=>f.completed).length"></span>
+                    x-text="rmMine.filter(f=>f.completed).length"></span>
             </button>
 
           </div>
@@ -1339,7 +1435,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
     <div x-show="view==='messages'" x-cloak>
       <div class="bg-white rounded-[12px] border border-[#E4E7EC] flex overflow-hidden" style="box-shadow:0 1px 4px rgba(7,29,43,0.04);height:calc(100vh - 130px)">
         <!-- Contact list -->
-        <div class="w-[220px] border-r border-[#E4E7EC] overflow-y-auto shrink-0">
+        <div class="msg-list-pane border-r border-[#E4E7EC] overflow-y-auto shrink-0" :class="{'msg-hide': activeContact}">
           <div class="px-3.5 py-3 border-b border-[#E4E7EC] space-y-2">
             <span class="text-[14px] font-bold text-[#172B3A]">Conversations</span>
             <div class="flex items-center gap-1.5 border border-[#E4E7EC] rounded-[8px] px-2.5 focus-within:border-[#1268F3] transition-colors" style="height:34px">
@@ -1384,7 +1480,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
           </div>
         </div>
         <!-- Thread -->
-        <div class="flex-1 flex flex-col min-w-0">
+        <div class="msg-thread-pane flex-1 flex flex-col min-w-0" :class="{'msg-hide': !activeContact}">
           <template x-if="!activeContact">
             <div class="flex-1 flex flex-col items-center justify-center p-8 text-center">
               <svg class="w-9 h-9 text-[#D1D9E6] mb-3"><use href="#icon-message-circle"/></svg>
@@ -1396,6 +1492,9 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
             <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
               <div class="flex items-center justify-between px-5 py-3.5 border-b border-[#E4E7EC] shrink-0">
                 <div class="flex items-center gap-2.5 min-w-0">
+                  <button @click="activeContact=null" class="md:hidden text-[#667085] hover:text-[#172B3A] transition-colors p-1 -ml-1 shrink-0" title="Back to conversations">
+                    <svg class="w-4 h-4"><use href="#icon-chevron-left"/></svg>
+                  </button>
                   <div class="relative shrink-0">
                     <div class="w-8 h-8 rounded-full bg-[#EEF4FF] flex items-center justify-center text-[10px] font-extrabold text-[#175CD3]"
                          x-text="activeContact.name.split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()"></div>
@@ -1457,6 +1556,158 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
         </div>
       </div>
     </div><!-- /messages -->
+
+    <!-- ── CALENDAR VIEW ──────────────────────────────────────────────────── -->
+    <div x-show="view==='calendar'" x-cloak class="space-y-4">
+
+      <!-- Month grid — green count = inquiries created that day, red dot = a past day with none -->
+      <div class="bg-white rounded-[10px] border border-[#E4E7EC] p-3 sm:p-6" style="box-shadow:0 1px 4px rgba(7,29,43,0.04)">
+        <div class="flex items-start justify-between gap-3 flex-wrap mb-4">
+          <div>
+            <div class="flex items-center gap-2">
+              <div class="text-[17px] sm:text-[19px] font-bold text-[#071D2B] leading-tight" x-text="calMonthLabel"></div>
+              <span class="inline-flex items-center rounded-full font-extrabold px-2 py-0.5 text-[10px] bg-[#EEF4FF] text-[#175CD3]"
+                    x-text="calMonthTotal+(calMonthTotal===1?' inquiry':' inquiries')"></span>
+            </div>
+            <div class="flex items-center gap-3 mt-1.5">
+              <span class="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[#667085]"><span class="w-1.5 h-1.5 rounded-full bg-[#16803C]"></span>Inquiries</span>
+              <span class="inline-flex items-center gap-1.5 text-[10px] font-semibold text-[#667085]"><span class="w-1.5 h-1.5 rounded-full bg-[#B54708]"></span>Follow-ups due</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <!-- Whose calendar (admin only) -->
+            <?php if (is_admin()): ?>
+            <div class="relative">
+              <select x-model="calUser" class="text-[12px] font-semibold text-[#344054] border rounded-[8px] pl-3 pr-7 bg-white focus:outline-none cursor-pointer"
+                      :class="calUser ? 'border-[#1268F3] text-[#175CD3]' : 'border-[#E4E7EC]'" style="height:32px;min-width:150px">
+                <template x-for="a in accounts.filter(a=>a.status==='approved')" :key="a.id">
+                  <option :value="a.name" x-text="a.name===currentUser ? a.name+' (me)' : a.name"></option>
+                </template>
+              </select>
+              <svg class="w-3 h-3 absolute right-2 top-1/2 -translate-y-1/2 text-[#667085] pointer-events-none"><use href="#icon-chevron-down"/></svg>
+            </div>
+            <?php endif; ?>
+            <button type="button" @click="calMonth = todayStr.slice(0,7); calDate=''" class="text-[11px] font-bold px-2.5 py-1.5 rounded-[8px] bg-[#EEF4FF] text-[#175CD3] hover:bg-[#1268F3] hover:text-white transition-colors">Today</button>
+            <div class="flex items-center gap-1 rounded-[9px] bg-[#F2F4F7] p-0.5">
+              <button type="button" @click="calShift(-1)" title="Previous month" class="w-7 h-7 flex items-center justify-center rounded-[7px] text-[#344054] hover:bg-white transition-colors"><svg class="w-3 h-3"><use href="#icon-chevron-left"/></svg></button>
+              <button type="button" @click="calShift(1)" title="Next month" class="w-7 h-7 flex items-center justify-center rounded-[7px] text-[#344054] hover:bg-white transition-colors"><svg class="w-3 h-3"><use href="#icon-chevron-right"/></svg></button>
+            </div>
+          </div>
+        </div>
+        <!-- .cal-grid: the prebuilt app.css has no grid-cols-7 utility -->
+        <div class="cal-grid">
+          <template x-for="(d, di) in ['Sun','Mon','Tue','Wed','Thu','Fri','Sat']" :key="di">
+            <div class="cal-head" :class="(di===0||di===6) && 'is-weekend'" x-text="d"></div>
+          </template>
+          <template x-for="(c, ci) in calCells" :key="ci">
+            <div>
+              <template x-if="c">
+                <button type="button" @click="calDate = (calDate===c.key ? '' : c.key)"
+                        :title="c.key + ' — ' + c.count + (c.count===1?' inquiry':' inquiries') + ' created, ' + c.fu + (c.fu===1?' follow-up':' follow-ups') + ' due'"
+                        class="cal-cell"
+                        :class="{ 'has-inq': c.count>0, 'is-sel': calDate===c.key, 'is-today': c.key===todayStr, 'is-weekend': ci%7===0 || ci%7===6 }">
+                  <span class="cal-num" x-text="c.day"></span>
+                  <span class="cal-marks">
+                    <span x-show="c.count" class="cal-pill" x-text="c.count"></span>
+                    <span x-show="c.fu" class="cal-pill is-fu"><svg><use href="#icon-bell"/></svg><span x-text="c.fu"></span></span>
+                  </span>
+                </button>
+              </template>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Follow-ups due on the selected day, or across the whole month -->
+      <div class="bg-white rounded-[10px] border border-[#E4E7EC] p-3 sm:p-6" style="box-shadow:0 1px 4px rgba(7,29,43,0.04)">
+        <div class="flex items-center justify-between gap-2 flex-wrap mb-3">
+          <div class="flex items-center gap-2">
+            <svg class="w-4 h-4 text-[#B54708]"><use href="#icon-bell"/></svg>
+            <div class="text-[14px] font-bold text-[#071D2B]"
+                 x-text="calDate ? 'Follow-ups on '+calDateLabel : 'Follow-ups in '+calMonthLabel"></div>
+            <span x-show="calFollowUps.length" class="text-[11px] font-bold text-[#667085]" x-text="'('+calFollowUps.length+')'"></span>
+          </div>
+          <button type="button" x-show="calDate" @click="calDate=''" class="text-[11px] font-bold px-2.5 py-1 rounded-[8px] bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC] transition-colors">Show whole month</button>
+        </div>
+
+        <div x-show="calFollowUps.length===0" class="flex flex-col items-center justify-center border border-dashed border-[#E4E7EC] rounded-[10px] text-center" style="padding:28px 24px">
+          <svg class="w-7 h-7 text-[#D1D9E6] mb-2"><use href="#icon-bell"/></svg>
+          <div class="text-[12px] text-[#667085]" x-text="calDate ? 'No follow-ups due on this date.' : 'No follow-ups due this month.'"></div>
+        </div>
+
+        <div class="space-y-2">
+          <template x-for="fu in calFollowUps" :key="fu.id">
+            <div class="border border-[#E4E7EC] rounded-[10px] px-3 py-2.5 hover:bg-[#F9FAFB] transition-colors flex items-center justify-between gap-3 flex-wrap">
+              <div class="flex items-center gap-2.5 flex-wrap min-w-0">
+                <span class="inline-flex items-center gap-1 text-[9px] font-extrabold px-2 py-0.5 rounded-full whitespace-nowrap"
+                      :class="fuStatus(fu)==='overdue'?'bg-[#FEF3F2] text-[#B42318]':fuStatus(fu)==='today'?'bg-[#EEF4FF] text-[#175CD3]':fuStatus(fu)==='upcoming'?'bg-[#F2F4F7] text-[#344054]':'bg-[#ECFDF3] text-[#16803C]'"
+                      x-text="fuStatus(fu)==='overdue'?'Overdue':fuStatus(fu)==='today'?'Today':fuStatus(fu)==='upcoming'?'Upcoming':'Done'"></span>
+                <span class="inline-flex items-center gap-1 text-[10px] font-semibold text-[#667085]">
+                  <svg class="w-3 h-3"><use href="#icon-clock"/></svg>
+                  <span x-text="(calDate ? '' : fu.follow_up_date+' ') + (fu.follow_up_time ? fuTimeLabel(fu.follow_up_time) : 'All day')"></span>
+                </span>
+                <button type="button" @click="openFuInquiry(fu)" class="text-[11px] font-extrabold text-[#1268F3] hover:underline" x-text="fu.inquiry_id"></button>
+                <span class="text-[12px] font-bold text-[#172B3A]" x-text="fu.client||''"></span>
+                <span class="text-[11px] text-[#667085]" x-text="fu.note" :class="fu.completed?'line-through text-[#B8CCED]':''"></span>
+              </div>
+              <div class="flex items-center gap-2 shrink-0">
+                <span class="text-[10px] font-semibold text-[#98A2B3]" x-text="fu.assigned_to"></span>
+                <template x-if="!fu.completed && (fu.assigned_to===currentUser || fu.created_by===currentUser)">
+                  <button type="button" @click="rmComplete(fu)"
+                          class="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-[8px] bg-[#ECFDF3] text-[#16803C] hover:bg-[#16803C] hover:text-white transition-colors">
+                    <svg class="w-3 h-3"><use href="#icon-check-circle"/></svg> Done
+                  </button>
+                </template>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Inquiries for the selected day, or the whole month when nothing is picked -->
+      <div class="bg-white rounded-[10px] border border-[#E4E7EC] p-3 sm:p-6" style="box-shadow:0 1px 4px rgba(7,29,43,0.04)">
+        <div class="flex items-center gap-2 mb-3">
+          <svg class="w-4 h-4 text-[#16803C]"><use href="#icon-calendar"/></svg>
+          <div class="text-[14px] font-bold text-[#071D2B]"
+               x-text="calDate ? 'Created on '+calDateLabel : 'Created in '+calMonthLabel"></div>
+          <span x-show="calInquiries.length" class="text-[11px] font-bold text-[#667085]" x-text="'('+calInquiries.length+')'"></span>
+        </div>
+
+        <div x-show="calInquiries.length===0" class="flex flex-col items-center justify-center border border-dashed border-[#E4E7EC] rounded-[10px] text-center" style="padding:40px 24px">
+          <svg class="w-8 h-8 text-[#D1D9E6] mb-2"><use href="#icon-calendar"/></svg>
+          <div class="text-[13px] font-bold text-[#344054] mb-1">No inquiries</div>
+          <div class="text-[12px] text-[#667085]" x-text="calDate ? 'Nothing was created on this date.' : 'Nothing was created this month.'"></div>
+        </div>
+
+        <div class="space-y-2">
+          <template x-for="inq in calInquiries" :key="inq.id">
+            <div class="border border-[#E4E7EC] rounded-[10px] px-3 py-2.5 hover:bg-[#F9FAFB] transition-colors">
+              <div class="flex items-center justify-between gap-3 flex-wrap">
+                <div class="flex items-center gap-2.5 flex-wrap min-w-0">
+                  <span class="text-[11px] font-bold text-[#071D2B]" x-text="inq.id"></span>
+                  <span x-show="inq.created_at" class="inline-flex items-center gap-1 text-[10px] font-semibold text-[#667085]">
+                    <svg class="w-3 h-3"><use href="#icon-clock"/></svg>
+                    <span x-text="fuTimeLabel(String(inq.created_at).slice(11,16))"></span>
+                  </span>
+                  <span class="text-[12px] font-bold text-[#172B3A]" x-text="inq.client"></span>
+                  <span class="text-[11px] text-[#667085]" x-text="inq.company"></span>
+                  <span class="inline-flex items-center rounded-full font-extrabold whitespace-nowrap px-2 py-0.5 text-[9px]" :class="stageClass(inq.stage)" x-text="stageLabel(inq.stage)"></span>
+                  <span class="inline-flex items-center rounded-full font-extrabold whitespace-nowrap px-2 py-0.5 text-[9px]" :class="outcomeClass(inq.outcome)" x-text="inq.outcome"></span>
+                </div>
+                <div class="flex items-center gap-2 shrink-0">
+                  <span class="text-[11px]" :class="isOverdue(inq)?'text-[#B42318] font-bold':'text-[#667085]'" x-text="'Due: '+dueLabel(inq)"></span>
+                  <span x-show="dueStatus(inq)!=='none'" class="inline-flex items-center rounded-full font-extrabold whitespace-nowrap px-2 py-0.5 text-[9px]"
+                        :class="dueStatus(inq)==='overdue'?'bg-[#FEF3F2] text-[#B42318]':dueStatus(inq)==='completed'?'bg-[#ECFDF3] text-[#16803C]':'bg-[#FFFAEB] text-[#B54708]'"
+                        x-text="dueStatus(inq)==='overdue'?'Overdue':dueStatus(inq)==='completed'?'Completed':'Pending'"></span>
+                  <button type="button" @click="openSummary(inq)" class="text-[11px] font-bold px-2.5 py-1 rounded-[8px] bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC] transition-colors">Summary</button>
+                </div>
+              </div>
+              <div class="text-[11px] text-[#667085] mt-1" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" x-text="stripHtml(inq.requirement)"></div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </div><!-- /calendar -->
 
     <!-- ── ANNOUNCEMENTS VIEW ─────────────────────────────────────────────── -->
     <div x-show="view==='announcements'" x-cloak class="space-y-4">
@@ -1585,17 +1836,17 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
           </div>
         </div>
 
-        <div class="overflow-x-auto" x-show="filteredLeaves.length>0">
-          <table class="w-full min-w-[700px] border-collapse">
+        <div class="overflow-x-auto" x-show="filteredLeaves.length>0" style="-webkit-overflow-scrolling:touch">
+          <table class="w-full border-collapse" style="min-width:700px">
             <thead>
               <tr class="bg-[#F8FAFC]" style="border-bottom:2px solid #E4E7EC">
-                <th x-show="isAdmin" class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3] w-[140px]">Member</th>
-                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3] w-[130px]">Type</th>
-                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3] w-[180px]">Dates</th>
-                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3] w-[70px]">Days</th>
+                <th x-show="isAdmin" class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]" style="width:140px">Member</th>
+                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]" style="width:130px">Type</th>
+                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]" style="width:180px">Dates</th>
+                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]" style="width:70px">Days</th>
                 <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]">Reason</th>
-                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3] w-[110px]">Status</th>
-                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3] w-[160px]">Actions</th>
+                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]" style="width:110px">Status</th>
+                <th class="px-5 py-3 text-left text-[10px] font-extrabold uppercase tracking-[0.07em] text-[#98A2B3]" style="width:160px">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -2512,7 +2763,10 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
           <span class="inline-flex items-center rounded-full font-extrabold whitespace-nowrap px-2.5 py-[3px] text-[10px]" :class="summaryFor?stageClass(summaryFor.stage):''" x-text="summaryFor?stageLabel(summaryFor.stage):''"></span>
           <span class="inline-flex items-center rounded-full font-extrabold whitespace-nowrap px-2.5 py-[3px] text-[10px]" :class="summaryFor?outcomeClass(summaryFor.outcome):''" x-text="summaryFor?.outcome||''"></span>
           <span class="text-[11px] text-[#667085]" x-text="'Owner: '+(summaryFor?.current_owner||'')"></span>
-          <span class="text-[11px] text-[#667085]" x-text="'Due: '+(summaryFor?.due_date||'TBD')"></span>
+          <span class="text-[11px]" :class="summaryFor&&isOverdue(summaryFor)?'text-[#B42318] font-bold':'text-[#667085]'" x-text="'Due: '+(summaryFor?dueLabel(summaryFor):'TBD')"></span>
+          <span x-show="summaryFor && dueStatus(summaryFor)!=='none'" class="inline-flex items-center rounded-full font-extrabold whitespace-nowrap px-2 py-0.5 text-[10px]"
+                :class="summaryFor&&dueStatus(summaryFor)==='overdue'?'bg-[#FEF3F2] text-[#B42318]':summaryFor&&dueStatus(summaryFor)==='completed'?'bg-[#ECFDF3] text-[#16803C]':'bg-[#FFFAEB] text-[#B54708]'"
+                x-text="summaryFor?(dueStatus(summaryFor)==='overdue'?'Overdue':dueStatus(summaryFor)==='completed'?'Completed':'Pending'):''"></span>
         </div>
       </div>
 
@@ -2767,7 +3021,15 @@ function spApp() {
     stageFilter: '',
     typeFilter: '',
     dateFilter: '',
+    inqMonth: new Date().toLocaleDateString('en-CA').slice(0,7),  // '' = every month; portal opens on the current one
+    _autoMonth: new Date().toLocaleDateString('en-CA').slice(0,7), // last month the portal picked by itself
     _inqPage: 0,
+
+    // ── Inquiry calendar (own view) ──
+    calMonth: new Date().toLocaleDateString('en-CA').slice(0,7), // 'YYYY-MM'
+    calDate: '',                                                 // '' | 'YYYY-MM-DD'
+    calUser: <?= json_encode(is_admin() ? $user['name'] : '', JSON_HEX_TAG) ?>, // admin only: whose calendar is shown
+    _now: Date.now(),                                            // ticks every minute so Pending → Overdue flips live
 
     darkMode: localStorage.getItem('sp_theme')==='dark',
     toggleDarkMode(){ this.darkMode=!this.darkMode; localStorage.setItem('sp_theme', this.darkMode?'dark':'light'); },
@@ -2806,9 +3068,12 @@ function spApp() {
     // ── Reminders view ──
     rmFollowUps: <?= json_encode($allFollowUps, JSON_HEX_TAG) ?>,
     rmFilter: 'all',
+    // Admins are served the whole team's follow-ups (the calendar's user picker needs them);
+    // the Reminders view stays personal.
+    get rmMine() { return this.rmFollowUps.filter(f => this._fuBelongsTo(f, this.currentUser)); },
     get rmFiltered() {
       const today = new Date().toLocaleDateString('en-CA');
-      return this.rmFollowUps.filter(f => {
+      return this.rmMine.filter(f => {
         if (this.rmFilter==='today')    return !f.completed && f.follow_up_date===today;
         if (this.rmFilter==='upcoming') return !f.completed && f.follow_up_date>today;
         if (this.rmFilter==='overdue')  return !f.completed && f.follow_up_date<today;
@@ -2849,7 +3114,8 @@ function spApp() {
       this.addInquiryForm.createdBy = this.currentUser;
       this.fetchNotifications();
       setInterval(() => this.fetchNotifications(), 30000);
-      this.$watch('view', () => { this.search=''; this._mob=false; this.statFilter=''; this.fuOpenFor=null; this._inqPage=0; this.msgSearch=''; if (this.view==='messages') this.refreshContacts(); if (this.view==='announcements') this.loadAnnouncements(); if (this.view==='leave') this.loadLeaves(); });
+      setInterval(() => { this._now = Date.now(); this._rollMonth(this.todayStr.slice(0,7)); }, 60000); // flips Pending → Overdue, and rolls the month strip at midnight, without a reload
+      this.$watch('view', () => { this.search=''; this._mob=false; this.statFilter=''; this.calDate=''; this.fuOpenFor=null; this._inqPage=0; this.msgSearch=''; if (this.view==='messages') this.refreshContacts(); if (this.view==='announcements') this.loadAnnouncements(); if (this.view==='leave') this.loadLeaves(); });
       ['search','statFilter','stageFilter','typeFilter','employee','dateFilter'].forEach(k => this.$watch(k, () => { this._inqPage=0; }));
       this._startPolling();
       this.$watch('addInquiryForm.client', name => {
@@ -3040,7 +3306,7 @@ function spApp() {
     get viewingEmployee() { return !!this.employee && this.employee !== this.currentUser; },
 
     get viewTitle() {
-      return {dashboard:'Dashboard',tasks:'My Tasks',approvals:'User Management',reminders:'Reminders',reports:'Reports',messages:'Messages',announcements:'Announcements',leave:'Leave'}[this.view]||'';
+      return {dashboard:'Dashboard',tasks:'My Tasks',approvals:'User Management',reminders:'Reminders',reports:'Reports',messages:'Messages',calendar:'Inquiry Calendar',announcements:'Announcements',leave:'Leave'}[this.view]||'';
     },
 
     get clientSuggestions() {
@@ -3064,6 +3330,14 @@ function spApp() {
         : { kind:'warning', text:'No records found for "'+name+'". If this is a new client, change the type to "New".' };
     },
 
+    // Owner, creator, or assigned on any step — the one definition of "this user's inquiry"
+    _inqBelongsTo(inq, name) {
+      return inq.current_owner===name || inq.created_by===name
+          || (inq.steps||[]).some(s => s.assigned_to===name || s.assigned_by===name);
+    },
+
+    _fuBelongsTo(fu, name) { return fu.assigned_to===name || fu.created_by===name; },
+
     get visibleInquiries() {
       if (this.isAdmin) return this.inquiries;
       // Server already filters by role; mirror here so client-side stats are consistent
@@ -3073,23 +3347,64 @@ function spApp() {
       });
     },
 
+    // Midnight rollover for a tab left open across a month boundary. Only moves the scope when the
+    // user is still sitting on the month the portal picked itself — a hand-picked month, or
+    // "All months", is never stomped mid-session.
+    _rollMonth(nowMonth) {
+      if (nowMonth === this._autoMonth) return;
+      if (this.inqMonth === this._autoMonth) this.inqMonth = nowMonth;
+      // Calendar rolls on the same guard; a day picked in the old month is no longer on the grid
+      if (this.calMonth === this._autoMonth) { this.calMonth = nowMonth; this.calDate = ''; }
+      this._autoMonth = nowMonth;
+    },
+
+    // Rows for the month dropdown: every month that has inquiries, newest first. `count` is the
+    // whole month, `open` is what is still unclosed — the badge that says a past month needs work.
+    get monthTabs() {
+      const cur = this.todayStr.slice(0,7);
+      const counts = { [cur]: 0 }, open = {}; // current month always listed, even on day one
+      this.visibleInquiries.forEach(i => {
+        const k = this._inqDateKey(i).slice(0,7);
+        if (!k) return;
+        counts[k] = (counts[k] || 0) + 1;
+        if (!this.isClosed(i)) open[k] = (open[k] || 0) + 1;
+      });
+      return Object.keys(counts).sort().reverse()
+        .map(k => ({ key:k, count:counts[k], open:open[k] || 0, label:this.monthLabel(k) }));
+    },
+
+    // Safety net for the strict month boundary: unclosed inquiries parked in months other than
+    // the one on screen. Surfaced on the dropdown so August's leftovers can't be forgotten.
+    get otherMonthsOpen() {
+      if (!this.inqMonth) return 0; // "All months" already shows everything
+      return this.monthTabs.reduce((n, m) => n + (m.key === this.inqMonth ? 0 : m.open), 0);
+    },
+
+    // Portal shows one month at a time, strictly by creation month — September lists only what
+    // September created. Nothing is archived or deleted: an older month's inquiries (open ones
+    // included) are worked and closed by picking that month in the dropdown.
+    get monthInquiries() {
+      if (!this.inqMonth) return this.visibleInquiries;
+      return this.visibleInquiries.filter(i => this._inqDateKey(i).slice(0,7) === this.inqMonth);
+    },
+
     get filtered() {
-      const isDone = i => i.outcome==='Inquiry Closed' || ['Payment Received','Lost','Cancelled'].includes(i.outcome) || ['Payment Received','Project Closed','Proposal Lost','Closure'].includes(i.stage);
-      const isIP   = i => !isDone(i) && (['Questionnaire','Link Testing','Field Work','Project Delivered','Invoice Sent','Won','Project Won and Started','Project Running','Project Completed'].includes(i.outcome) || ['Project Execution'].includes(i.stage));
-      const isPend = i => !isDone(i) && !isIP(i) && (['Project Won','Project Lost','Proposal Submitted','Follow-up Sent','Awaiting Client Response','No Reply','On Hold'].includes(i.outcome) || ['Communication / Proposal','Decision'].includes(i.stage));
-      return this.visibleInquiries.filter(inq => {
-        const isClosed = i => i.outcome==='Inquiry Closed' || ['Payment Received','Inquiry Closed'].includes(i.outcome) || i.stage==='Closure' || ['Lost','Cancelled'].includes(i.outcome) || ['Payment Received','Project Closed','Proposal Lost'].includes(i.stage);
+      // Split once, not per row. Multiple words are ANDed, so "asha proposal" finds the inquiry
+      // Asha owns that is at proposal stage — order and field don't matter.
+      const terms = this.search ? this.search.toLowerCase().split(/\s+/).filter(Boolean) : null;
+      return this.monthInquiries.filter(inq => {
+        const isClosed = i => this.isClosed(i);
         if (this.statFilter==='done'       && !isClosed(inq))        return false;
         if (this.statFilter==='received'   && (isClosed(inq) || inq.stage!=='Inquiry')) return false;
         if (this.statFilter==='inProgress' && (isClosed(inq) || inq.stage==='Inquiry')) return false;
-        if (this.statFilter==='overdue'    && (!inq.overdue || isClosed(inq))) return false;
-        if (this.employee && inq.current_owner!==this.employee && inq.created_by!==this.employee && !(inq.steps||[]).some(s=>s.assigned_to===this.employee||s.assigned_by===this.employee)) return false;
+        if (this.statFilter==='overdue'    && !this.isOverdue(inq)) return false;
+        if (this.employee && !this._inqBelongsTo(inq, this.employee)) return false;
         if (this.stageFilter && inq.stage!==this.stageFilter) return false;
         if (this.typeFilter && inq.inquiry_type!==this.typeFilter) return false;
         if (this.dateFilter==='today' && !this._isCreatedToday(inq)) return false;
-        if (this.search) {
-          const q = this.search.toLowerCase();
-          return inq.id.toLowerCase().includes(q)||inq.client.toLowerCase().includes(q)||inq.company.toLowerCase().includes(q)||this.stripHtml(inq.requirement||'').toLowerCase().includes(q);
+        if (terms) {
+          const hay = this._haystack(inq);
+          if (!terms.every(t => hay.includes(t))) return false;
         }
         return true;
       });
@@ -3101,13 +3416,9 @@ function spApp() {
     },
 
     get stats() {
-      const v = this.visibleInquiries;
+      const v = this.monthInquiries;
       // Closed: Stage 5 steps OR Stage 4 lost path "Inquiry Closed" OR legacy closed
-      const isClosed = i => i.outcome==='Inquiry Closed'
-        || ['Payment Received','Inquiry Closed'].includes(i.outcome)
-        || i.stage==='Closure'
-        || ['Lost','Cancelled'].includes(i.outcome)
-        || ['Payment Received','Project Closed','Proposal Lost'].includes(i.stage);
+      const isClosed = i => this.isClosed(i);
       // Inquiry Received: Stage 1, not yet actioned
       const isReceived = i => !isClosed(i) && i.stage==='Inquiry';
       // In Progress: Stages 2-4 active (not closed, past initial receipt)
@@ -3117,7 +3428,7 @@ function spApp() {
         received:   v.filter(isReceived).length,
         inProgress: v.filter(isInProgress).length,
         done:       v.filter(isClosed).length,
-        overdue:    v.filter(i=>i.overdue && !isClosed(i)).length,
+        overdue:    v.filter(i=>this.isOverdue(i)).length,
       };
     },
 
@@ -3129,6 +3440,7 @@ function spApp() {
         this.stageFilter && { label:'Stage: '+this.stageFilter,   clear:()=>this.stageFilter='' },
         this.typeFilter  && { label:'Type: '+this.typeFilter,     clear:()=>this.typeFilter='' },
         this.dateFilter  && { label:'Created: Today',             clear:()=>this.dateFilter='' },
+        this.inqMonth !== this.todayStr.slice(0,7) && { label: this.inqMonth ? 'Month: '+this.monthLabel(this.inqMonth) : 'All months', clear:()=>this.inqMonth=this.todayStr.slice(0,7) },
       ].filter(Boolean);
     },
 
@@ -3174,7 +3486,7 @@ function spApp() {
 
 
     // ── Helpers ──
-    resetFilters() { this.search=''; this.employee=''; this.stageFilter=''; this.typeFilter=''; this.statFilter=''; this.dateFilter=''; this._inqPage=0; },
+    resetFilters() { this.search=''; this.employee=''; this.stageFilter=''; this.typeFilter=''; this.statFilter=''; this.dateFilter=''; this.inqMonth=this.todayStr.slice(0,7); this._inqPage=0; },
 
     initials(name) { return (name||'').split(' ').slice(0,2).map(w=>w[0]).join('').toUpperCase(); },
 
@@ -3563,6 +3875,25 @@ function spApp() {
       return h.toString().padStart(2,'0') + ':' + min;
     },
     stripHtml(html) { const d=document.createElement('div'); d.innerHTML=html||''; return d.textContent||d.innerText||''; },
+
+    // One lowercase blob of everything a person might type looking for an inquiry: ids, names,
+    // both date formats, contact details, stage/outcome, money, remarks, and every task on it.
+    // Only built while the search box has text, so it costs nothing the rest of the time.
+    _haystack(inq) {
+      const steps = inq.steps || [];
+      return [
+        inq.id, inq.date, inq.created_at, inq.inquiry_type, inq.client, inq.designation,
+        inq.company, inq.country, inq.client_type, inq.created_by, inq.current_owner,
+        inq.due_date, inq.due_time, inq.delivery_date, inq.follow_up_date,
+        inq.stage, inq.outcome, inq.outcome_reason, inq.proposal_value, inq.final_value,
+        inq.email, inq.secondary_email, inq.phone, inq.website, inq.email_subject,
+        inq.team_remark_by,
+        this.stripHtml(inq.requirement || ''),
+        this.stripHtml(inq.admin_remark || ''),
+        this.stripHtml(inq.team_remark || ''),
+        ...steps.flatMap(s => [s.assigned_to, s.assigned_by, s.status, this.stripHtml(s.instruction || '')]),
+      ].filter(Boolean).join(' ').toLowerCase();
+    },
     showReqPopup(e, html) {
       const r = e.currentTarget.getBoundingClientRect();
       const popupMaxH = 280;
@@ -4081,7 +4412,7 @@ function spApp() {
     inqRowStyle(inq, i) {
       const d = this.darkMode;
       let bg = i % 2 === 1 ? (d ? '#1B222B' : '#F8FAFC') : (d ? '#151B23' : '#ffffff');
-      if (inq.overdue && !inq._open) bg = d ? '#241A1B' : '#FFEAEA';
+      if (this.isOverdue(inq) && !inq._open) bg = d ? '#241A1B' : '#FFEAEA';
       if (inq._open) bg = d ? '#16223A' : '#EFF6FF';
       if (inq._open) {
         return 'border:2px solid #1268F3;margin:2px 0;background:' + bg + ';box-shadow:0 4px 16px rgba(18,104,243,0.18)';
@@ -4184,11 +4515,125 @@ function spApp() {
 
     get todayStr() { return new Date().toLocaleDateString('en-CA'); },
 
-    _isCreatedToday(inq) {
-      const today = this.todayStr;
-      if (inq.created_at && String(inq.created_at).slice(0,10) === today) return true;
+    // 'YYYY-MM-DD' the inquiry was created on — created_at is authoritative, inq.date is the fallback
+    _inqDateKey(inq) {
+      if (inq.created_at) return String(inq.created_at).slice(0,10);
       const d = new Date(inq.date);
-      return !isNaN(d) && d.toLocaleDateString('en-CA') === today;
+      return isNaN(d) ? '' : d.toLocaleDateString('en-CA');
+    },
+
+    _isCreatedToday(inq) { return this._inqDateKey(inq) === this.todayStr; },
+
+    // ── Inquiry calendar ──
+
+    // { 'YYYY-MM-DD': count } across every inquiry this user can see — recomputes
+    // automatically when one is added, so no separate calendar fetch is needed.
+    // Both calendar sources honour the admin-only user picker; calUser stays '' for everyone else.
+    get calSrcInquiries() {
+      return this.calUser ? this.visibleInquiries.filter(i => this._inqBelongsTo(i, this.calUser)) : this.visibleInquiries;
+    },
+    get calSrcFollowUps() {
+      return this.calUser ? this.rmFollowUps.filter(f => this._fuBelongsTo(f, this.calUser)) : this.rmFollowUps;
+    },
+
+    get calCounts() {
+      const m = {};
+      this.calSrcInquiries.forEach(i => { const k = this._inqDateKey(i); if (k) m[k] = (m[k]||0) + 1; });
+      return m;
+    },
+
+    // { 'YYYY-MM-DD': count } of open follow-ups — same rmFollowUps the Reminders view uses
+    get calFuCounts() {
+      const m = {};
+      this.calSrcFollowUps.forEach(f => { if (!f.completed && f.follow_up_date) m[f.follow_up_date] = (m[f.follow_up_date]||0) + 1; });
+      return m;
+    },
+
+    // Month grid: leading nulls pad to the first weekday, then one cell per day
+    get calCells() {
+      const [y, mo] = this.calMonth.split('-').map(Number);
+      const counts  = this.calCounts;
+      const fu      = this.calFuCounts;
+      const cells   = Array.from({ length: new Date(y, mo-1, 1).getDay() }, () => null);
+      for (let d = 1; d <= new Date(y, mo, 0).getDate(); d++) {
+        const key = this.calMonth + '-' + String(d).padStart(2,'0');
+        cells.push({ key, day: d, count: counts[key] || 0, fu: fu[key] || 0 });
+      }
+      return cells;
+    },
+
+    monthLabel(m) {
+      const [y, mo] = m.split('-').map(Number);
+      return new Date(y, mo-1, 1).toLocaleDateString([], { month:'long', year:'numeric' });
+    },
+
+    get calMonthLabel() {
+      const [y, mo] = this.calMonth.split('-').map(Number);
+      return new Date(y, mo-1, 1).toLocaleDateString([], { month:'long', year:'numeric' });
+    },
+
+    get calDateLabel() {
+      if (!this.calDate) return '';
+      const [y, m, d] = this.calDate.split('-').map(Number);
+      return new Date(y, m-1, d).toLocaleDateString([], { weekday:'short', day:'2-digit', month:'short', year:'numeric' });
+    },
+
+    // Selected day, or the whole displayed month when no day is picked
+    get calInquiries() {
+      const prefix = this.calDate || this.calMonth;
+      // newest first; no created_at (date-only fallback) sorts to the end of its day
+      const key = i => String(i.created_at || this._inqDateKey(i)); // 'Y-m-d H:i:s' > 'Y-m-d' → no-time sorts last in its day
+      return this.calSrcInquiries.filter(i => this._inqDateKey(i).startsWith(prefix))
+                 .sort((a,b) => key(b).localeCompare(key(a)));
+    },
+
+    // Follow-ups due on the selected day, or across the displayed month. Earliest first —
+    // this is a to-do list, unlike the inquiry list above it.
+    get calFollowUps() {
+      const prefix = this.calDate || this.calMonth;
+      const key = f => f.follow_up_date + ' ' + (f.follow_up_time || '23:59');
+      return this.calSrcFollowUps.filter(f => String(f.follow_up_date||'').startsWith(prefix))
+                 .sort((a,b) => (a.completed - b.completed) || key(a).localeCompare(key(b)));
+    },
+
+    get calMonthTotal() {
+      return this.calSrcInquiries.filter(i => this._inqDateKey(i).startsWith(this.calMonth)).length;
+    },
+
+    calShift(n) {
+      const [y, mo] = this.calMonth.split('-').map(Number);
+      const d = new Date(y, mo-1+n, 1);
+      this.calMonth = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0');
+    },
+
+    // ── Due date / time ──
+
+    // Closed = no longer actionable. Single source for stats, filters and the due pill.
+    isClosed(i) {
+      return ['Payment Received','Inquiry Closed','Lost','Cancelled'].includes(i.outcome)
+          || ['Payment Received','Project Closed','Proposal Lost','Closure'].includes(i.stage);
+    },
+
+    // Due date + optional 'HH:MM' → ms. No time means end of that day. null when TBD.
+    dueTs(inq) {
+      if (!inq.due_date || inq.due_date === 'TBD') return null;
+      const t = new Date(inq.due_date + ' ' + (inq.due_time || '23:59')).getTime();
+      return isNaN(t) ? null : t;
+    },
+
+    // 'completed' | 'overdue' | 'pending' | 'none'
+    dueStatus(inq) {
+      if (this.isClosed(inq)) return 'completed';
+      const ts = this.dueTs(inq);
+      if (ts === null) return 'none';
+      return ts < this._now ? 'overdue' : 'pending';
+    },
+
+    isOverdue(inq) { return this.dueStatus(inq) === 'overdue'; },
+
+    dueLabel(inq) {
+      if (!inq.due_date || inq.due_date === 'TBD') return 'TBD';
+      return inq.due_date + (inq.due_time ? ' · ' + this.fuTimeLabel(inq.due_time) : '');
     },
 
 
@@ -4285,7 +4730,7 @@ function spApp() {
         if(!map[key]) map[key]={name:key,inqs:0,active:0,closed:0,tasksOD:0};
         map[key].inqs++;
         if(this._rptClosed(i)) map[key].closed++; else map[key].active++;
-        if(!this._rptClosed(i) && i.overdue) map[key].tasksOD++;
+        if(!this._rptClosed(i) && this.isOverdue(i)) map[key].tasksOD++;
       });
       return Object.values(map).sort((a,b)=>b.inqs-a.inqs);
     },
@@ -4299,7 +4744,7 @@ function spApp() {
       const hdr=['ID','Client','Company','Stage','Outcome','Owner','Created','Due Date','Status'];
       const rows=inqs.map(i=>[i.id,i.client,i.company,i.stage,i.outcome||'',i.current_owner||i.created_by,
         (i.date||i.created_at||'').slice(0,10),i.due_date||'',
-        this._rptClosed(i)?'Closed':(i.overdue?'Overdue':'Active')]);
+        this._rptClosed(i)?'Closed':(this.isOverdue(i)?'Overdue':'Active')]);
       const csv=[hdr,...rows].map(r=>r.map(c=>'"'+String(c||'').replace(/"/g,'""')+'"').join(',')).join('\n');
       const a=Object.assign(document.createElement('a'),{href:'data:text/csv;charset=utf-8,'+encodeURIComponent(csv),download:'sp-report-'+today+'.csv'});
       document.body.appendChild(a);a.click();a.remove();

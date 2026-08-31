@@ -260,6 +260,7 @@ $migrations = [
     ['table'=>'messages',      'column'=>'attachment',       'sql'=>"ALTER TABLE messages ADD COLUMN attachment VARCHAR(255) NULL AFTER body"],
     ['table'=>'accounts',      'column'=>'last_seen_at',     'sql'=>"ALTER TABLE accounts ADD COLUMN last_seen_at TIMESTAMP NULL AFTER requested_at"],
     ['table'=>'leave_requests', 'column'=>'leave_type',       'sql'=>"ALTER TABLE leave_requests ADD COLUMN leave_type VARCHAR(40) NOT NULL DEFAULT 'Casual Leave' AFTER account_id"],
+    ['table'=>'inquiries',     'column'=>'due_time',         'sql'=>"ALTER TABLE inquiries ADD COLUMN due_time VARCHAR(5) NULL AFTER due_date"],
 ];
 
 foreach ($migrations as $m) {
