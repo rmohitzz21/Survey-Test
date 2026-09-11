@@ -1,0 +1,6 @@
+# User-uploaded message attachments — real client/staff files, not source.
+# uploads/ itself is already tracked; keep new attachment dirs out.
+uploads/msg/
+
+# Scratch
+Dummy/

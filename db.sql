@@ -38,6 +38,8 @@ CREATE TABLE IF NOT EXISTS inquiries (
   stage          VARCHAR(100) NOT NULL DEFAULT 'Inquiry Received',
   outcome        VARCHAR(100) NOT NULL DEFAULT 'In Progress',
   outcome_reason VARCHAR(255),
+  closed_at      TIMESTAMP    NULL,          -- set when stage/outcome first becomes closed; > due = late
+
   proposal_value VARCHAR(30),
   delivery_date  VARCHAR(20),
   follow_up_date VARCHAR(20),
@@ -74,7 +76,8 @@ CREATE TABLE IF NOT EXISTS inquiry_steps (
   instruction TEXT         NOT NULL,
   remark      TEXT,
   status      VARCHAR(50)  NOT NULL DEFAULT 'New',
-  due         VARCHAR(20)  NOT NULL DEFAULT 'TBD',
+  completed_at TIMESTAMP   NULL,                     -- set when status first becomes Done; > due = late
+  due         VARCHAR(32)  NOT NULL DEFAULT 'TBD',   -- '01 Sep 2026 · 02:30 PM' = 22 chars
   created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (inquiry_id) REFERENCES inquiries(id) ON DELETE CASCADE
 );
@@ -206,3 +209,7 @@ INSERT INTO accounts (name, email, password_hash, role, status, requested_at) VA
 -- leave_type values: Casual Leave, Half Day, Sick Leave, Emergency Leave, WFH
 -- 2026-08-28
 -- ALTER TABLE inquiries ADD COLUMN due_time VARCHAR(5) NULL AFTER due_date;
+-- 2026-09-01
+-- ALTER TABLE inquiry_steps ADD COLUMN completed_at TIMESTAMP NULL AFTER status;
+-- ALTER TABLE inquiries ADD COLUMN closed_at TIMESTAMP NULL AFTER outcome_reason;
+-- Run migrate.php instead — it also backfills both stamps for pre-existing rows.

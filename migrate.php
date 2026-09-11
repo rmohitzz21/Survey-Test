@@ -104,7 +104,7 @@ try {
         instruction TEXT         NOT NULL,
         remark      TEXT,
         status      VARCHAR(50)  NOT NULL DEFAULT 'New',
-        due         VARCHAR(20)  NOT NULL DEFAULT 'TBD',
+        due         VARCHAR(32)  NOT NULL DEFAULT 'TBD',
         created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
         updated_at  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         FOREIGN KEY (inquiry_id) REFERENCES inquiries(id) ON DELETE CASCADE
@@ -261,6 +261,8 @@ $migrations = [
     ['table'=>'accounts',      'column'=>'last_seen_at',     'sql'=>"ALTER TABLE accounts ADD COLUMN last_seen_at TIMESTAMP NULL AFTER requested_at"],
     ['table'=>'leave_requests', 'column'=>'leave_type',       'sql'=>"ALTER TABLE leave_requests ADD COLUMN leave_type VARCHAR(40) NOT NULL DEFAULT 'Casual Leave' AFTER account_id"],
     ['table'=>'inquiries',     'column'=>'due_time',         'sql'=>"ALTER TABLE inquiries ADD COLUMN due_time VARCHAR(5) NULL AFTER due_date"],
+    ['table'=>'inquiry_steps', 'column'=>'completed_at',     'sql'=>"ALTER TABLE inquiry_steps ADD COLUMN completed_at TIMESTAMP NULL AFTER status"],
+    ['table'=>'inquiries',     'column'=>'closed_at',        'sql'=>"ALTER TABLE inquiries ADD COLUMN closed_at TIMESTAMP NULL AFTER outcome_reason"],
 ];
 
 foreach ($migrations as $m) {
@@ -276,6 +278,42 @@ foreach ($migrations as $m) {
     } catch (Exception $e) {
         $results[] = ['err', $m['table'].'.'.$m['column'].' — ERROR: '.$e->getMessage()];
     }
+}
+
+// VARCHAR(20) silently chopped "01 Sep 2026 · 02:30 PM" (22 chars) down to "… · 02:30 ",
+// and the lost AM/PM made every afternoon task read as overdue since 02:30 that morning.
+try {
+    $pdo->exec("ALTER TABLE inquiry_steps MODIFY due VARCHAR(32) NOT NULL DEFAULT 'TBD'");
+    $results[] = ['ok', 'inquiry_steps.due — VARCHAR(32), fits "01 Sep 2026 · 02:30 PM" ✓'];
+} catch (Exception $e) {
+    $results[] = ['err', 'inquiry_steps.due — ERROR: '.$e->getMessage()];
+}
+
+// Backfill the two new stamps for work that finished before this migration existed, otherwise the
+// report shows a blank history. Steps have no completion log, so `updated_at` is the best proxy;
+// inquiries take the timestamp of their closing stage_history row.
+// ponytail: proxy backfill, one-shot — accurate stamps only start from the migration onward.
+try {
+    $n = $pdo->exec("UPDATE inquiry_steps SET completed_at=updated_at
+                     WHERE completed_at IS NULL AND status IN ('Done','Completed')");
+    $results[] = ['ok', "inquiry_steps.completed_at — backfilled $n done task(s) from updated_at ✓"];
+} catch (Exception $e) {
+    $results[] = ['err', 'inquiry_steps.completed_at backfill — ERROR: '.$e->getMessage()];
+}
+
+try {
+    $n = $pdo->exec("UPDATE inquiries i SET i.closed_at = (
+                         SELECT MIN(STR_TO_DATE(REPLACE(h.date,' · ',' '), '%d %b %Y %H:%i'))
+                         FROM stage_history h
+                         WHERE h.inquiry_id = i.id
+                           AND (h.outcome IN ('Payment Received','Inquiry Closed','Completed','Lost','Cancelled')
+                             OR h.stage   IN ('Payment Received','Project Closed','Proposal Lost','Closure','Cancelled')))
+                     WHERE i.closed_at IS NULL
+                       AND (i.outcome IN ('Payment Received','Inquiry Closed','Completed','Lost','Cancelled')
+                         OR i.stage   IN ('Payment Received','Project Closed','Proposal Lost','Closure','Cancelled'))");
+    $results[] = ['ok', "inquiries.closed_at — backfilled $n closed inquiry(ies) from stage_history ✓"];
+} catch (Exception $e) {
+    $results[] = ['err', 'inquiries.closed_at backfill — ERROR: '.$e->getMessage()];
 }
 
 try {

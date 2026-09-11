@@ -22,7 +22,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = 'Inquiry "'.$id.'" not found.';
         } elseif (isset($_POST['confirm']) && $_POST['confirm'] === '1') {
             // Same closed signal the app itself sends from the stage-update UI
-            $pdo->prepare("UPDATE inquiries SET stage='Closure', outcome='Inquiry Closed' WHERE id=?")->execute([$id]);
+            // closed_at too, or force-closing here would wipe the miss out of the admin report
+            $pdo->prepare("UPDATE inquiries SET stage='Closure', outcome='Inquiry Closed', closed_at=COALESCE(closed_at,NOW()) WHERE id=?")->execute([$id]);
             $msg = 'Inquiry <strong>'.$id.'</strong> ('.$inq['client'].($inq['company'] ? ' · '.$inq['company'] : '').') marked as completed — no longer overdue.';
             $inq = null;
         }

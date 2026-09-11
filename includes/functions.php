@@ -119,10 +119,39 @@ function load_notifications(PDO $pdo, int $account_id): array {
 function due_ts(?string $date, ?string $time = null): ?int {
     $d = trim((string)$date);
     if ($d === '' || strcasecmp($d, 'TBD') === 0) return null;
-    if (strpos($d, '·') !== false) $d = trim(str_replace('·', '', $d));
-    else                           $d .= ' ' . ($time ?: '23:59');
-    $ts = strtotime($d);
+    if (strpos($d, '·') !== false) {
+        // Step rows carry the time inline: "01 Sep 2026 · 02:30 PM". A too-short column used to chop
+        // that to "01 Sep 2026 · 02:30 ", and strtotime read the leftover as 02:30 AM — so a task due
+        // this afternoon showed Overdue all day. A time missing its AM/PM can't be recovered, so
+        // fall back to end of day rather than guessing the early half.
+        [$d, $t] = array_map('trim', explode('·', $d, 2));
+        $time = preg_match('/^\d{1,2}:\d{2}\s*[AP]M$/i', $t) ? $t : null;
+    }
+    $ts = strtotime($d . ' ' . ($time ?: '23:59'));
     return $ts === false ? null : $ts;
+}
+
+// ─── Closed / late ───────────────────────────────────────────────────────────
+
+const CLOSED_OUTCOMES = ['Payment Received','Inquiry Closed','Completed','Lost','Cancelled'];
+const CLOSED_STAGES   = ['Payment Received','Project Closed','Proposal Lost','Closure','Cancelled'];
+
+function is_closed_inquiry(?string $stage, ?string $outcome): bool {
+    return in_array((string)$outcome, CLOSED_OUTCOMES, true)
+        || in_array((string)$stage,   CLOSED_STAGES,   true);
+}
+
+/**
+ * True when work was *delivered after* its due moment. `$completedAt` is a DB TIMESTAMP
+ * ('Y-m-d H:i:s'), or null while the work is still open — open work is overdue, not late.
+ *
+ * Overdue is a live state that vanishes the moment someone submits; late is the permanent
+ * record of that miss, which is what the admin report has to count.
+ */
+function is_late(?string $completedAt, ?int $dueTs): bool {
+    if ($dueTs === null || $completedAt === null || trim($completedAt) === '') return false;
+    $ts = strtotime($completedAt);
+    return $ts !== false && $ts > $dueTs;
 }
 
 // ─── Load inquiries with steps + history ─────────────────────────────────────
@@ -157,15 +186,24 @@ function load_inquiries(PDO $pdo, ?array $user = null): array {
         $steps = $pdo->prepare("SELECT s.*, NULL AS attachments FROM inquiry_steps s WHERE s.inquiry_id IN ($ph) ORDER BY s.id");
         $steps->execute($ids);
     }
-    $now            = time();
-    $closedOutcomes = ['Payment Received','Inquiry Closed','Completed','Lost','Cancelled'];
-    $closedStages   = ['Payment Received','Project Closed','Proposal Lost','Closure','Cancelled'];
+    $now = time();
+
+    // Closing an inquiry closes its tasks with it — a step left at "In Progress" on a won/lost
+    // inquiry is not work anyone still owes, so it must never read as overdue.
+    $closedIds = [];
+    foreach ($inqs as $i) {
+        if (is_closed_inquiry($i['stage'], $i['outcome'])) $closedIds[$i['id']] = true;
+    }
 
     $stepsBy = [];
     foreach ($steps->fetchAll() as $row) {
         $row['attachments'] = $row['attachments'] ? explode('||', $row['attachments']) : [];
         $dueTs = due_ts($row['due']);
-        $row['overdue'] = ($dueTs !== null && $dueTs < $now && !in_array($row['status'], ['Done','Cancelled']));
+        $row['overdue'] = ($dueTs !== null && $dueTs < $now
+            && !in_array($row['status'], ['Done','Cancelled'])
+            && !isset($closedIds[$row['inquiry_id']]));
+        // Submitting late clears `overdue` — `late` keeps the miss on the record for the report.
+        $row['late'] = is_late($row['completed_at'] ?? null, $dueTs);
         $stepsBy[$row['inquiry_id']][] = $row;
     }
 
@@ -182,9 +220,8 @@ function load_inquiries(PDO $pdo, ?array $user = null): array {
         $inq['is_new'] = (bool)$inq['is_new'];
         $dueTs = due_ts($inq['due_date'], $inq['due_time'] ?? null);
         // overdue computed here — not stored in DB
-        $inq['overdue'] = ($dueTs !== null && $dueTs < $now
-            && !in_array($inq['outcome'], $closedOutcomes)
-            && !in_array($inq['stage'], $closedStages));
+        $inq['overdue'] = ($dueTs !== null && $dueTs < $now && !isset($closedIds[$inq['id']]));
+        $inq['late']    = is_late($inq['closed_at'] ?? null, $dueTs);
         $inq['steps']       = $stepsBy[$inq['id']] ?? [];
         $inq['history']     = []; // lazy-loaded on-demand via api/inquiry.php?action=load_history
         $inq['attachments'] = $attBy[$inq['id']] ?? [];

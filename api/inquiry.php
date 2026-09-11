@@ -31,7 +31,10 @@ if ($action === 'stage_update') {
             json_response(['ok'=>false,'message'=>'Only admins or the inquiry creator can update the stage.'], 403);
         }
     }
-    $pdo->prepare("UPDATE inquiries SET stage=?,outcome=?,outcome_reason=?,proposal_value=?,delivery_date=?,follow_up_date=?,final_value=? WHERE id=?")
+    // Stamp when the inquiry actually closed, so a closure past its due date stays reportable as
+    // late. COALESCE keeps the first closure time; reopening clears it.
+    $closedAt = is_closed_inquiry($b['stage'] ?? '', $b['outcome'] ?? '') ? 'COALESCE(closed_at,NOW())' : 'NULL';
+    $pdo->prepare("UPDATE inquiries SET stage=?,outcome=?,outcome_reason=?,proposal_value=?,delivery_date=?,follow_up_date=?,final_value=?,closed_at=$closedAt WHERE id=?")
         ->execute([$b['stage'],$b['outcome'],$b['outcomeReason']??null,$b['proposalValue']??null,$b['deliveryDate']??null,$b['followUpDate']??null,$b['finalValue']??null,$id]);
     $pdo->prepare("INSERT INTO stage_history (inquiry_id,stage,outcome,outcome_reason,by_user,date,remark,final_remark) VALUES (?,?,?,?,?,?,?,?)")
         ->execute([$id,$b['stage'],$b['outcome'],$b['outcomeReason']??'',$user['name'],date('d M Y · H:i'),$b['remark']??'',$b['finalRemark']??'']);
@@ -115,7 +118,10 @@ if ($action === 'step_status') {
         }
     }
 
-    $pdo->prepare("UPDATE inquiry_steps SET status=? WHERE id=?")->execute([$newStatus, $stepId]);
+    // Same for tasks: record the submit time so a task handed in past its due keeps reading as
+    // late once `overdue` flips off. Re-clicking Done must not move the stamp — COALESCE holds it.
+    $completedAt = in_array($newStatus, ['Done','Completed']) ? 'COALESCE(completed_at,NOW())' : 'NULL';
+    $pdo->prepare("UPDATE inquiry_steps SET status=?, completed_at=$completedAt WHERE id=?")->execute([$newStatus, $stepId]);
 
     if ($srow) {
         $preview = mb_strimwidth(strip_tags($srow['instruction']), 0, 60, '…');

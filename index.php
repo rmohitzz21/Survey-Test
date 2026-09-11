@@ -99,6 +99,10 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
   .numInputWrapper:hover{background:#EEF4FF!important;border-radius:4px!important}
   .flatpickr-time input:focus,.flatpickr-time input:hover{background:#EEF4FF!important;outline:none!important}
   input.flatpickr-input::placeholder{color:#98A2B3!important}
+  /* ── My Tasks row ── whole row is a link to the inquiry, so it lights up on hover */
+  .task-row{transition:background .12s ease}
+  .task-row:hover{background:#F9FAFB}
+  body.dark-mode .task-row:hover{background:#1B222B}
   /* ── Inquiry month grid ── */
   .cal-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:5px}
   .cal-head{font-size:9px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:#98A2B3;text-align:center;padding-bottom:6px}
@@ -632,7 +636,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                     <div class="text-[11px]" style="line-height:1.3" :class="isOverdue(inq)?'text-[#B42318] font-bold':'text-[#344054]'" x-text="dueLabel(inq)"></div>
                     <span x-show="dueStatus(inq)!=='none'" class="inline-flex items-center rounded-full font-extrabold whitespace-nowrap px-1.5 py-0.5 text-[9px] w-fit mt-0.5"
                           :class="dueStatus(inq)==='overdue'?'bg-[#FEF3F2] text-[#B42318]':dueStatus(inq)==='completed'?'bg-[#ECFDF3] text-[#16803C]':'bg-[#FFFAEB] text-[#B54708]'"
-                          x-text="dueStatus(inq)==='overdue'?'Overdue':dueStatus(inq)==='completed'?'Completed':'Pending'"></span>
+                          x-text="dueCountdown(inq)"></span>
                   </div>
                   <!-- Ownership status -->
                   <div class="inq-cell" style="width:120px">
@@ -904,8 +908,8 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                         <div class="flex flex-col gap-1">
                           <template x-if="step.due && step.due !== 'TBD'">
                             <div class="flex flex-col gap-0 pl-2 border-l-2 border-[#D1D9E6]">
-                              <span class="text-[11px] font-semibold text-[#344054]" x-text="(step.due||'').split(' · ')[0]"></span>
-                              <span x-show="(step.due||'').includes(' · ')" class="text-[10px] text-[#667085]" x-text="(step.due||'').split(' · ')[1]"></span>
+                              <span class="text-[11px] font-semibold text-[#344054]" x-text="stepDueDate(step)"></span>
+                              <span x-show="stepDueTime(step)" class="text-[10px] font-semibold text-[#667085]" x-text="stepDueTime(step)"></span>
                             </div>
                           </template>
                           <template x-if="!step.due || step.due === 'TBD'">
@@ -1015,68 +1019,64 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
       </template>
       <template x-if="myTasks.length>0">
         <div class="space-y-5">
-          <template x-for="(t,ti) in myTasks" :key="t.inq.id+'-'+t.step.id">
-            <div class="bg-white rounded-[12px] border border-[#E4E7EC] border-l-[5px] overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
-                 :class="t.step.overdue        ? 'border-l-[#B42318]' :
-                         t.step.status==='Completed'  ? 'border-l-[#16803C]' :
-                         t.step.status==='In Progress'? 'border-l-[#1268F3]' :
-                         t.step.status==='Pending'    ? 'border-l-[#B54708]' :
-                         t.step.status==='Other'      ? 'border-l-[#5925DC]' :
-                                                        'border-l-[#D1D9E6]'"
-                 style="box-shadow:0 1px 4px rgba(7,29,43,0.05)"
-                 @click="goToInquiry(t.inq)">
+         <template x-for="g in myTaskGroups" :key="g.key">
+          <div>
+            <!-- Group heading doubles as the fold control — the count lives here rather than in a
+                 tile, so there is exactly one place that says how many are late. -->
+            <button type="button" @click="toggleTaskGroup(g.key)" class="flex items-center gap-2 w-full mb-2 text-left">
+              <svg class="w-3 h-3 text-[#98A2B3]" style="transition:transform .15s"
+                   :style="taskGroupsClosed.includes(g.key) ? 'transform:rotate(-90deg)' : ''"><use href="#icon-chevron-down"/></svg>
+              <span class="text-[11px] font-extrabold uppercase tracking-[0.05em]"
+                    :class="{ 'text-[#B42318]': g.key==='overdue', 'text-[#B54708]': g.key==='today',
+                              'text-[#175CD3]': g.key==='upcoming', 'text-[#667085]': g.key==='none' }"
+                    x-text="g.label"></span>
+              <span class="text-[10px] font-bold text-[#667085] bg-[#F2F4F7] rounded-full px-1.5 py-0.5" x-text="g.items.length"></span>
+              <span class="flex-1 border-t border-[#E4E7EC]"></span>
+            </button>
 
-              <!-- Header: serial + IDs + status -->
-              <div class="px-4 py-3 flex items-center justify-between gap-3 border-b border-[#F2F4F7]"
-                   :class="t.step.overdue ? 'bg-[#FFF5F5]' : 'bg-[#F8FAFC]'">
-                <div class="flex items-center gap-3 min-w-0">
-                  <span class="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-[11px] font-extrabold"
-                        :class="t.step.overdue ? 'bg-[#FEF3F2] text-[#B42318]' :
-                                t.step.status==='Completed'   ? 'bg-[#ECFDF3] text-[#16803C]' :
-                                t.step.status==='In Progress' ? 'bg-[#EFF8FF] text-[#1268F3]' :
-                                t.step.status==='Pending'     ? 'bg-[#FFFAEB] text-[#B54708]' :
-                                t.step.status==='Other'       ? 'bg-[#F4F3FF] text-[#5925DC]' :
-                                                                'bg-[#F2F4F7] text-[#667085]'"
-                        x-text="ti+1"></span>
-                  <div class="min-w-0">
-                    <div class="flex items-center gap-2 flex-wrap">
-                      <span class="text-[13px] font-extrabold text-[#1268F3]" x-text="t.inq.id"></span>
-                      <span class="text-[#D1D9E6]">·</span>
-                      <span class="text-[13px] font-bold text-[#172B3A] truncate" x-text="t.inq.client"></span>
+            <div x-show="!taskGroupsClosed.includes(g.key)"
+                 class="bg-white rounded-[10px] border border-[#E4E7EC]" style="overflow:hidden;box-shadow:0 1px 4px rgba(7,29,43,0.04)">
+              <template x-for="(t, ti) in g.items" :key="t.inq.id+'-'+t.step.id">
+                <!-- One task = one row. Lateness is said once in the due chip; the left bar only
+                     echoes it as colour, and the row itself stays a single scannable line. -->
+                <div class="task-row flex items-center gap-3 px-4 py-2.5 cursor-pointer"
+                     :style="ti ? 'border-top:1px solid '+(darkMode?'#232A33':'#F2F4F7') : ''"
+                     @click="goToInquiry(t.inq)">
+
+                  <span class="shrink-0" style="width:3px;height:30px;border-radius:2px"
+                        :style="'background:'+({overdue:'#B42318',today:'#B54708',upcoming:'#1268F3',none:'#D1D9E6'}[stepDueState(t.step)])"></span>
+
+                  <div class="min-w-0 flex-1">
+                    <div class="flex items-center gap-2 min-w-0">
+                      <span class="text-[11px] font-extrabold text-[#1268F3] shrink-0" x-text="t.inq.id"></span>
+                      <span class="text-[12px] font-bold text-[#172B3A] truncate" x-text="t.inq.client"></span>
+                      <span x-show="t.inq.company && t.inq.company!==t.inq.client"
+                            class="text-[11px] text-[#667085] truncate" x-text="'· '+t.inq.company"></span>
                     </div>
-                    <div x-show="t.inq.company" class="text-[11px] text-[#667085] mt-0.5 truncate" x-text="t.inq.company"></div>
+                    <div class="text-[11px] text-[#667085] truncate mt-0.5" x-text="stripHtml(t.step.instruction)"></div>
                   </div>
-                </div>
-                <div class="flex items-center gap-2 shrink-0">
-                  <span x-show="t.step.overdue" class="text-[11px] font-bold px-2 py-0.5 rounded-[5px] bg-[#FEF3F2] text-[#B42318]">⚠ Overdue</span>
-                  <span class="inline-flex items-center rounded-[6px] font-bold whitespace-nowrap px-2.5 py-1 text-[11px]"
-                        :class="stepStatusClass(t.step.status)" x-text="t.step.status"></span>
-                </div>
-              </div>
 
-              <!-- Task instruction -->
-              <div class="px-4 py-3">
-                <div class="text-[13px] text-[#344054] leading-[1.6] line-clamp-2" x-text="stripHtml(t.step.instruction)"></div>
-              </div>
+                  <div class="flex items-center gap-2 shrink-0">
+                    <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-[5px] whitespace-nowrap"
+                          :class="{ 'bg-[#FEF3F2] text-[#B42318]': stepDueState(t.step)==='overdue',
+                                    'bg-[#FFFAEB] text-[#B54708]': stepDueState(t.step)==='today',
+                                    'bg-[#F2F4F7] text-[#667085]': stepDueState(t.step)==='upcoming' || stepDueState(t.step)==='none' }">
+                      <svg class="w-3 h-3 shrink-0"><use href="#icon-calendar"/></svg>
+                      <span x-text="stepDueLabel(t.step)"></span>
+                      <span x-show="stepDueTime(t.step)" class="font-semibold" x-text="stepDueTime(t.step)"></span>
+                    </span>
+                    <span class="inline-flex items-center rounded-[5px] font-bold whitespace-nowrap px-2 py-0.5 text-[10px]"
+                          :class="stepStatusClass(t.step.status)" x-text="t.step.status"></span>
+                    <span class="text-[11px] text-[#667085] whitespace-nowrap"
+                          x-text="(taskViewFilter==='to_me' ? 'from ' : 'with ') + (taskViewFilter==='to_me' ? t.step.assigned_by : t.step.assigned_to)"></span>
+                    <svg class="w-3.5 h-3.5 text-[#D1D9E6] shrink-0"><use href="#icon-chevron-right"/></svg>
+                  </div>
 
-              <!-- Footer: who's involved + due date -->
-              <div class="px-4 py-2.5 border-t border-[#F2F4F7] bg-[#FAFBFC] flex items-center justify-between gap-3 flex-wrap">
-                <div class="flex items-center gap-1.5 text-[11px] text-[#667085]">
-                  <template x-if="taskViewFilter==='to_me'">
-                    <span>Assigned by <span class="font-bold text-[#344054]" x-text="t.step.assigned_by"></span></span>
-                  </template>
-                  <template x-if="taskViewFilter==='by_me'">
-                    <span>Assigned to <span class="font-bold text-[#344054]" x-text="t.step.assigned_to"></span></span>
-                  </template>
                 </div>
-                <div x-show="t.step.due && t.step.due!=='TBD'" class="flex items-center gap-1 text-[11px]" :class="t.step.overdue ? 'text-[#B42318] font-bold' : 'text-[#667085]'">
-                  <svg class="w-3 h-3"><use href="#icon-calendar"/></svg>
-                  <span x-text="'Due '+(t.step.due||'').split(' · ')[0]"></span>
-                </div>
-              </div>
-
+              </template>
             </div>
-          </template>
+          </div>
+         </template>
         </div>
       </template>
     </div>
@@ -1698,7 +1698,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
                   <span class="text-[11px]" :class="isOverdue(inq)?'text-[#B42318] font-bold':'text-[#667085]'" x-text="'Due: '+dueLabel(inq)"></span>
                   <span x-show="dueStatus(inq)!=='none'" class="inline-flex items-center rounded-full font-extrabold whitespace-nowrap px-2 py-0.5 text-[9px]"
                         :class="dueStatus(inq)==='overdue'?'bg-[#FEF3F2] text-[#B42318]':dueStatus(inq)==='completed'?'bg-[#ECFDF3] text-[#16803C]':'bg-[#FFFAEB] text-[#B54708]'"
-                        x-text="dueStatus(inq)==='overdue'?'Overdue':dueStatus(inq)==='completed'?'Completed':'Pending'"></span>
+                        x-text="dueCountdown(inq)"></span>
                   <button type="button" @click="openSummary(inq)" class="text-[11px] font-bold px-2.5 py-1 rounded-[8px] bg-[#F2F4F7] text-[#344054] hover:bg-[#E4E7EC] transition-colors">Summary</button>
                 </div>
               </div>
@@ -2766,7 +2766,7 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
           <span class="text-[11px]" :class="summaryFor&&isOverdue(summaryFor)?'text-[#B42318] font-bold':'text-[#667085]'" x-text="'Due: '+(summaryFor?dueLabel(summaryFor):'TBD')"></span>
           <span x-show="summaryFor && dueStatus(summaryFor)!=='none'" class="inline-flex items-center rounded-full font-extrabold whitespace-nowrap px-2 py-0.5 text-[10px]"
                 :class="summaryFor&&dueStatus(summaryFor)==='overdue'?'bg-[#FEF3F2] text-[#B42318]':summaryFor&&dueStatus(summaryFor)==='completed'?'bg-[#ECFDF3] text-[#16803C]':'bg-[#FFFAEB] text-[#B54708]'"
-                x-text="summaryFor?(dueStatus(summaryFor)==='overdue'?'Overdue':dueStatus(summaryFor)==='completed'?'Completed':'Pending'):''"></span>
+                x-text="summaryFor?dueCountdown(summaryFor):''"></span>
         </div>
       </div>
 
@@ -3064,6 +3064,7 @@ function spApp() {
 
     // ── My Tasks view ──
     taskViewFilter: 'to_me', // 'to_me' | 'by_me'
+    taskGroupsClosed: [],    // due-groups the user has folded away
 
     // ── Reminders view ──
     rmFollowUps: <?= json_encode($allFollowUps, JSON_HEX_TAG) ?>,
@@ -3449,9 +3450,12 @@ function spApp() {
       return [...new Set(this.accounts.map(a=>a.role).filter(r=>!std.includes(r)))];
     },
 
+    // Both lists skip closed inquiries: once an inquiry is won, lost or paid, its leftover steps
+    // are not work anyone still owes, so they drop off My Tasks instead of nagging forever.
     get tasksAssignedToMe() {
       const out = [];
       this.inquiries.forEach(inq => {
+        if (this.isClosed(inq)) return;
         (inq.steps||[]).forEach(step => {
           if (step.assigned_to===this.currentUser && !['Done','Completed','Cancelled'].includes(step.status))
             out.push({ inq, step });
@@ -3462,6 +3466,7 @@ function spApp() {
     get tasksAssignedByMe() {
       const out = [];
       this.inquiries.forEach(inq => {
+        if (this.isClosed(inq)) return;
         (inq.steps||[]).forEach(step => {
           if (step.assigned_by===this.currentUser && step.assigned_to!==this.currentUser && !['Done','Completed','Cancelled'].includes(step.status))
             out.push({ inq, step });
@@ -3469,8 +3474,63 @@ function spApp() {
       });
       return out;
     },
+
+    // A step keeps date and time in one string: "01 Sep 2026 · 02:30 PM".
+    stepDueDate(step) { return String(step.due || '').split('·')[0].trim(); },
+
+    // Rows written before the due column was widened lost their AM/PM to truncation ("· 02:30 ").
+    // The server reads those as end of day, so hide the fragment here rather than show a half-time
+    // that nothing honours. Same test as due_ts() in includes/functions.php — keep them in step.
+    stepDueTime(step) {
+      const t = (String(step.due || '').split('·')[1] || '').trim();
+      return /^\d{1,2}:\d{2}\s*[AP]M$/i.test(t) ? t.toUpperCase() : '';
+    },
+
+    // Due state for a task card. Reuses the server's `overdue` flag as the single source of truth
+    // for lateness (it already accounts for status and the parent inquiry) and only adds the
+    // "today" distinction, which a plain overdue/not-overdue split cannot express.
+    stepDueState(step) {
+      if (!step.due || step.due === 'TBD') return 'none';
+      if (step.overdue) return 'overdue';
+      const d = new Date(this.stepDueDate(step));
+      if (isNaN(d)) return 'none';
+      return d.toLocaleDateString('en-CA') === this.todayStr ? 'today' : 'upcoming';
+    },
+
+    stepDueLabel(step) {
+      const raw = this.stepDueDate(step);
+      switch (this.stepDueState(step)) {
+        case 'none':  return 'No due date';
+        case 'today': return 'Due today';
+        case 'overdue': {
+          const days = Math.round((new Date(this.todayStr) - new Date(raw)) / 86400000);
+          return days <= 0 ? 'Overdue' : days + (days === 1 ? ' day overdue' : ' days overdue');
+        }
+        default: return 'Due ' + raw;
+      }
+    },
+    toggleTaskGroup(key) {
+      this.taskGroupsClosed = this.taskGroupsClosed.includes(key)
+        ? this.taskGroupsClosed.filter(k => k !== key)
+        : [...this.taskGroupsClosed, key];
+    },
+
+    // The list as report sections. myTasks is already urgency-sorted, so bucketing keeps that
+    // order inside each group and empty groups simply don't render.
+    get myTaskGroups() {
+      const labels = { overdue:'Overdue', today:'Due today', upcoming:'Upcoming', none:'No due date' };
+      return ['overdue','today','upcoming','none']
+        .map(k => ({ key:k, label:labels[k], items:this.myTasks.filter(t => this.stepDueState(t.step) === k) }))
+        .filter(g => g.items.length);
+    },
+
+    // Most urgent first — a task list sorted by inquiry id makes you hunt for what's actually late.
     get myTasks() {
-      return this.taskViewFilter==='by_me' ? this.tasksAssignedByMe : this.tasksAssignedToMe;
+      const rank = { overdue:0, today:1, upcoming:2, none:3 };
+      const ts   = s => { const d = new Date(this.stepDueDate(s)); return isNaN(d) ? Infinity : d.getTime(); };
+      const list = this.taskViewFilter==='by_me' ? this.tasksAssignedByMe : this.tasksAssignedToMe;
+      return [...list].sort((a,b) =>
+        rank[this.stepDueState(a.step)] - rank[this.stepDueState(b.step)] || ts(a.step) - ts(b.step));
     },
 
     get teamWorkload() {
@@ -4636,6 +4696,21 @@ function spApp() {
       return inq.due_date + (inq.due_time ? ' · ' + this.fuTimeLabel(inq.due_time) : '');
     },
 
+    // Pill text. Before the due date it stays a plain "Pending" — a "6h left" countdown was tried
+    // and dropped as noise. Once late it says how late, off _now, which ticks every minute.
+    dueCountdown(inq) {
+      const st = this.dueStatus(inq);
+      if (st === 'completed') return 'Completed';
+      if (st === 'none')      return '';
+      if (st !== 'overdue')   return 'Pending';
+      const mins = Math.floor((this._now - this.dueTs(inq)) / 60000);
+      const days = Math.floor(mins / 1440);
+      const amt  = mins < 60   ? Math.max(mins, 1) + 'm'
+                 : mins < 1440 ? Math.floor(mins / 60) + 'h'
+                 : days + (days === 1 ? ' day' : ' days');
+      return amt + ' overdue';
+    },
+
 
     fuStatus(fu) {
       const t = new Date().toLocaleDateString('en-CA');
@@ -4723,16 +4798,29 @@ function spApp() {
         v = v.filter(i => this._rptInRange(i.created_at||i.date));
       return v;
     },
+    // Inquiry columns key off the owner; task columns off each step's assignee, so a missed
+    // deadline lands on whoever actually owed the work. `overdue` = still open past due,
+    // `late` = submitted after due — a late submit clears overdue, so both must be counted.
     get rptTeamStats() {
-      const map={};
+      const map={}, row=k=>map[k]||(map[k]={name:k,inqs:0,active:0,closed:0,tasksOD:0,inqLate:0,tasks:0,taskOD:0,taskLate:0});
       this.rptInquiries.forEach(i=>{
-        const key=i.current_owner||i.created_by; if(!key) return;
-        if(!map[key]) map[key]={name:key,inqs:0,active:0,closed:0,tasksOD:0};
-        map[key].inqs++;
-        if(this._rptClosed(i)) map[key].closed++; else map[key].active++;
-        if(!this._rptClosed(i) && this.isOverdue(i)) map[key].tasksOD++;
+        const key=i.current_owner||i.created_by;
+        if(key){
+          const m=row(key);
+          m.inqs++;
+          if(this._rptClosed(i)) m.closed++; else m.active++;
+          if(!this._rptClosed(i) && this.isOverdue(i)) m.tasksOD++;
+          if(i.late) m.inqLate++;
+        }
+        (i.steps||[]).forEach(s=>{
+          if(!s.assigned_to) return;
+          const m=row(s.assigned_to);
+          m.tasks++;
+          if(s.overdue)   m.taskOD++;
+          else if(s.late) m.taskLate++;
+        });
       });
-      return Object.values(map).sort((a,b)=>b.inqs-a.inqs);
+      return Object.values(map).sort((a,b)=>(b.taskOD+b.taskLate+b.tasksOD+b.inqLate)-(a.taskOD+a.taskLate+a.tasksOD+a.inqLate)||b.inqs-a.inqs);
     },
 
     initRptCharts() {},
@@ -4741,10 +4829,13 @@ function spApp() {
       const inqs=this.rptInquiries;
       if(!inqs.length){ this.addToast('No data to export','error'); return; }
       const today=new Date().toLocaleDateString('en-CA');
-      const hdr=['ID','Client','Company','Stage','Outcome','Owner','Created','Due Date','Status'];
+      const hdr=['ID','Client','Company','Stage','Outcome','Owner','Created','Due Date','Status','Tasks Overdue','Tasks Late','Late By'];
       const rows=inqs.map(i=>[i.id,i.client,i.company,i.stage,i.outcome||'',i.current_owner||i.created_by,
         (i.date||i.created_at||'').slice(0,10),i.due_date||'',
-        this._rptClosed(i)?'Closed':(this.isOverdue(i)?'Overdue':'Active')]);
+        this._rptClosed(i)?(i.late?'Closed (Late)':'Closed'):(this.isOverdue(i)?'Overdue':'Active'),
+        (i.steps||[]).filter(s=>s.overdue).map(s=>s.assigned_to).join('; '),
+        (i.steps||[]).filter(s=>!s.overdue&&s.late).map(s=>s.assigned_to).join('; '),
+        i.late?(i.closed_at||'').slice(0,16):'']);
       const csv=[hdr,...rows].map(r=>r.map(c=>'"'+String(c||'').replace(/"/g,'""')+'"').join(',')).join('\n');
       const a=Object.assign(document.createElement('a'),{href:'data:text/csv;charset=utf-8,'+encodeURIComponent(csv),download:'sp-report-'+today+'.csv'});
       document.body.appendChild(a);a.click();a.remove();

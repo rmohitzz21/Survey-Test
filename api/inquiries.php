@@ -82,12 +82,13 @@ try {
     $stmt->execute([$id]);
     $inqRow = $stmt->fetch();
     $inqRow['is_new']      = (bool)$inqRow['is_new'];
-    $inqRow['overdue']     = false;
+    $inqRow['overdue']     = false;   // brand new — nothing can be past due yet
+    $inqRow['late']        = false;
     $inqRow['history']     = [];
     $inqRow['attachments'] = [];
     $sStmt = $pdo->prepare("SELECT s.* FROM inquiry_steps s WHERE s.inquiry_id=? ORDER BY s.id");
     $sStmt->execute([$id]);
-    $inqRow['steps'] = array_map(fn($s) => array_merge($s, ['attachments'=>[], 'overdue'=>false]), $sStmt->fetchAll());
+    $inqRow['steps'] = array_map(fn($s) => array_merge($s, ['attachments'=>[], 'overdue'=>false, 'late'=>false]), $sStmt->fetchAll());
 
     json_response(['ok'=>true,'id'=>$id,'inquiry'=>$inqRow]);
 } catch (Exception $e) {
