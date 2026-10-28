@@ -1,103 +1,69 @@
 # Survey Pacific — Work Journey
 
-Internal inquiry and task workflow portal for Survey Pacific (IST). Staff manage client inquiries through stages, steps/tasks, follow-ups, leave, messages, reports, and related team tools.
+Internal inquiry and task workflow portal for Survey Pacific (IST). Staff manage client inquiries through stages and steps, plus leave, messages, calendar, reports, and related team tools.
 
 ## Stack
 
-- **PHP** (XAMPP / Apache) with session-based auth
-- **MySQL** (local database name for `SP_APP_ENV=local`: `sp_work`)
-- **Alpine.js** UI in `index.php` (and related view partials)
-- **Tailwind CSS** built into `assets/app.css` from `src/input.css` via `tailwind.config.js`
+- **PHP** (XAMPP / Apache) with session auth and CSRF
+- **MySQL** (local: `sp_work` when `SP_APP_ENV=local`)
+- **Alpine.js** UI primarily in `index.php`
+- **CSS** via `assets/app.css` (Tailwind build) plus `assets/css/portal.css` and related stylesheets
 
-No Composer or Node runtime is required to run the app. Node is optional only if you rebuild Tailwind or run the Node-based unit tests.
+No Composer app framework and no root React/Vite app. Node is optional (Tailwind rebuild, JS unit scripts, Playwright).
 
-## Requirements (local)
+## Quick start (local)
 
-- Apache and MySQL running (e.g. XAMPP)
-- PHP with PDO MySQL
-- App document root pointing at this project folder
+1. Place this project under your Apache document root.
+2. Copy `.env.example` → `.env` and set `SP_APP_ENV=local`.
+3. Ensure MySQL database `sp_work` exists and schema is applied.
+4. Start Apache + MySQL; open `login.php` in the browser.
 
-## Local setup
+Details: **[docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md)**.
 
-1. Clone or copy this project under your web root (e.g. `htdocs`).
-2. Copy `.env.example` to `.env` in the project root.
-3. Set at least:
-   - `SP_APP_ENV=local` — uses fixed local DB settings in `includes/db.php` (`localhost` / `sp_work` / `root` / empty password) and **ignores** `SP_DB_*`.
-4. Ensure MySQL has a database named `sp_work` (and schema applied via your usual migrate / schema-update process for this project).
-5. Open the site in the browser (e.g. `http://localhost/.../login.php`) and sign in with an existing account.
+## Documentation
 
-For **uat** or **production**, set `SP_APP_ENV` accordingly and provide non-empty `SP_DB_HOST`, `SP_DB_NAME`, `SP_DB_USER`, and `SP_DB_PASS`. Never commit a real `.env`.
+| Doc | Contents |
+|-----|----------|
+| [docs/PROJECT_OVERVIEW.md](docs/PROJECT_OVERVIEW.md) | Purpose, stack, capabilities |
+| [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md) | Where to find / change features |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Portal ↔ API ↔ auth flow |
+| [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) | XAMPP, env vars (placeholders) |
+| [docs/TESTING.md](docs/TESTING.md) | PHP, Node, Playwright commands |
+| [docs/DEVELOPMENT_WORKFLOW.md](docs/DEVELOPMENT_WORKFLOW.md) | Branch, commit, PR |
+| [docs/stitch.md](docs/stitch.md) | Design / Stitch prompt pack (reference only) |
 
-Optional one-time empty-database bootstrap keys (documented in `.env.example`): `SP_BOOTSTRAP_ADMIN_NAME`, `SP_BOOTSTRAP_ADMIN_EMAIL`, `SP_BOOTSTRAP_ADMIN_PASSWORD`. Remove them after the first Master Admin can log in.
-
-## Directory overview
-
-| Path | Role |
-|------|------|
-| `index.php`, `login.php` | Main app and login |
-| `api/` | JSON API endpoints |
-| `includes/` | Shared PHP (`auth`, `db`, `env`, helpers) — not web-served |
-| `assets/` | CSS and vendor JS served to the browser |
-| `admin/` | Master Admin inquiry tools |
-| `uploads/` | User files; direct HTTP access denied — use `api/serve.php` when authenticated |
-| `storage/` | Runtime session files (gitignored) |
-| `scripts/` | CLI / quarantined maintenance (HTTP denied) |
-| `tests/` | CLI tests (HTTP denied) |
-| `src/` | Tailwind source (`input.css`) |
-| `docs/` | Non-runtime documentation (design briefs, etc.) |
-| `db.sql` | Schema reference dump (not served as a download) |
-
-## Documentation (`docs/`)
-
-Non-runtime material lives under `docs/`. It is not loaded by the PHP application.
-
-- `docs/stitch.md` — Google Stitch design / prompt pack for UI redesign work. Reference only; not application code. Root `.htaccess` denies HTTP download of `*.md` files when Apache honors those rules.
-
-## Uploads and storage
-
-- Files land under `uploads/` (inquiry, step, message, and resource subfolders).
-- Apache rules deny direct browsing of uploads; authenticated downloads go through `api/serve.php`.
-- PHP sessions use `storage/` (ignored by Git). Do not commit session files or real upload binaries.
-
-## Tests
-
-Run from the project root. Prefer the PHP binary from XAMPP when needed.
-
-**PHP examples:**
+## Tests (short)
 
 ```bat
 php tests\due-ts-test.php
 php tests\session-cookie-test.php
-php tests\complete-guard-test.php
-```
-
-**Node examples** (plain `node`, no test framework required for these scripts):
-
-```bat
+php tests\leave-notice-test.php
 node tests\calendar-test.js
-node tests\month-scope-test.js
-node tests\search-test.js
+
+cd tests\browser
+npm install
+npx playwright install chromium
+npx playwright test
 ```
 
-`tests/feature-integration-test.php` exercises a running local app + database; only run it when your local stack is up and you accept it mutating/reading that environment.
+Full commands and credential notes: **[docs/TESTING.md](docs/TESTING.md)**.
 
-Rebuild CSS after editing Tailwind sources (optional):
+## Directory snapshot
 
-```bat
-npx tailwindcss -i src/input.css -o assets/app.css --minify
-```
+| Path | Role |
+|------|------|
+| `index.php`, `login.php` | Main portal and login |
+| `api/` | JSON APIs |
+| `includes/` | Auth, DB, helpers (not web-served) |
+| `assets/` | CSS/JS served to the browser |
+| `admin/` | Master Admin tools UI |
+| `tests/` | CLI tests + `tests/browser` Playwright |
+| `docs/` | Developer documentation |
+| `uploads/` / `storage/` | Files / sessions (not for Git commits) |
 
-## Security-sensitive deployment notes
+## Security notes
 
-- Copy `.env.example` → `.env` on the server; set `SP_APP_ENV` to `uat` or `production` and all four `SP_DB_*` values. **Never commit `.env`.**
-- Keep separate database credentials for local, UAT, and production.
-- Rely on the project `.htaccess` rules (and host Apache `AllowOverride`) so `/scripts/`, `/tests/`, `/includes/`, `/storage/`, `/.env`, `*.sql`, and direct `/uploads/` paths are not publicly readable.
-- Master Admin utilities and migrates require an authenticated Master Admin session and CSRF where implemented — do not reintroduce shared URL tokens.
-- Quarantined one-off scripts under `scripts/` are CLI-oriented; do not expose them on the public web root.
-
-## What not to commit
-
-- `.env` or any file with real passwords
-- `storage/` session data
-- Real files under `uploads/` (markers/`.htaccess` only)
-- Host-specific secrets or one-off credential migrate scripts that are gitignored under `scripts/`
+- Never commit `.env` or real passwords.
+- Keep separate DB credentials for local / UAT / production.
+- Mutating APIs expect CSRF (`X-CSRF-Token`); session expiry on `api/` 401 is handled by `assets/js/fetch-session-guard.js`.
+- Rely on `.htaccess` (and Apache `AllowOverride`) to keep `/includes/`, `/scripts/`, `/tests/`, `/storage/`, and direct `/uploads/` closed.
