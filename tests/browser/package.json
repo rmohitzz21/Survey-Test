@@ -1,0 +1,13 @@
+{
+  "name": "survey-pacific-browser-smoke",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Isolated Playwright smoke tests for the Survey Pacific PHP portal",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0"
+  }
+}
