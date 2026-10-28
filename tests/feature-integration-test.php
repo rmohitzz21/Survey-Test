@@ -74,6 +74,42 @@ function login(string $base, string $cookie, string $email, string $password): a
     return http($cookie, 'POST', "$base/api/login.php", ['email' => $email, 'password' => $password]);
 }
 
+/**
+ * Local disposable DB only (same convention as the late-close fixture below).
+ * Refuses to proceed unless SELECT DATABASE() is exactly sp_work.
+ */
+function local_sp_work_pdo(): PDO {
+    $pdo = new PDO('mysql:host=localhost;dbname=sp_work;charset=utf8mb4', 'root', '', [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::MYSQL_ATTR_INIT_COMMAND => "SET time_zone = '+05:30'",
+    ]);
+    $name = (string)$pdo->query('SELECT DATABASE()')->fetchColumn();
+    if ($name !== 'sp_work') {
+        throw new RuntimeException('Refusing fixture SQL: expected database sp_work, got '.$name);
+    }
+    return $pdo;
+}
+
+/** Delete only leave rows created by this suite (reason marker), for one account. */
+function purge_qa_integration_leave(PDO $pdo, int $accountId): int {
+    $stmt = $pdo->prepare(
+        "DELETE FROM leave_requests WHERE account_id = ? AND reason LIKE ?"
+    );
+    $stmt->execute([$accountId, 'QA integration leave%']);
+    return $stmt->rowCount();
+}
+
+/** Mirror api/leave.php remaining for a calendar year (entitlement 18). */
+function leave_remaining_days(PDO $pdo, int $accountId, int $year): float {
+    $q = $pdo->prepare("SELECT
+            COALESCE(SUM(CASE WHEN status='approved' THEN days ELSE 0 END),0) AS taken,
+            COALESCE(SUM(CASE WHEN status='pending'  THEN days ELSE 0 END),0) AS pending
+        FROM leave_requests WHERE account_id=? AND YEAR(start_date)=?");
+    $q->execute([$accountId, $year]);
+    $row = $q->fetch(PDO::FETCH_ASSOC) ?: ['taken' => 0, 'pending' => 0];
+    return max(0.0, 18.0 - (float)$row['taken'] - (float)$row['pending']);
+}
+
 $tmp = sys_get_temp_dir();
 $adminJar  = tempnam($tmp, 'sp_admin_');
 $opsJar    = tempnam($tmp, 'sp_ops_');
@@ -383,15 +419,43 @@ ok('Member leave list + summary', ($leaveList['json']['ok'] ?? false) === true &
 
 $start = date('Y-m-d', strtotime('+'.(200 + (int)date('s')).' days'));
 $end   = date('Y-m-d', strtotime($start.' +1 day'));
-$leaveReq = http($memberJar, 'POST', "$BASE/api/leave.php", [
-    'action' => 'request',
-    'leaveType' => 'Casual Leave',
-    'startDate' => $start,
-    'endDate' => $end,
-    'reason' => 'QA integration leave request '.$uniq,
-]);
-$leaveId = $leaveReq['json']['id'] ?? null;
-ok('Member request leave', ($leaveReq['json']['ok'] ?? false) === true && $leaveId, $leaveReq['body']);
+$leaveYear = (int)substr($start, 0, 4);
+$leaveNeedDays = (new DateTime($start))->diff(new DateTime($end))->days + 1;
+$leaveReady = false;
+
+try {
+    if (!$memberId) {
+        throw new RuntimeException('memberId not resolved; refusing leave fixture cleanup');
+    }
+    $leavePdo = local_sp_work_pdo();
+    $purged = purge_qa_integration_leave($leavePdo, (int)$memberId);
+    ok('Leave fixture: purged prior QA leave', true, 'removed='.$purged.' account='.$memberId);
+    $rem = leave_remaining_days($leavePdo, (int)$memberId, $leaveYear);
+    $leaveReady = $rem >= $leaveNeedDays;
+    ok(
+        'Leave fixture: entitlement headroom',
+        $leaveReady,
+        'year='.$leaveYear.' remaining='.$rem.' need='.$leaveNeedDays
+            .($leaveReady ? '' : ' (non-QA leave may remain; not deleting)')
+    );
+} catch (Throwable $e) {
+    ok('Leave fixture: local DB cleanup', false, $e->getMessage());
+}
+
+$leaveId = null;
+if ($leaveReady) {
+    $leaveReq = http($memberJar, 'POST', "$BASE/api/leave.php", [
+        'action' => 'request',
+        'leaveType' => 'Casual Leave',
+        'startDate' => $start,
+        'endDate' => $end,
+        'reason' => 'QA integration leave request '.$uniq,
+    ]);
+    $leaveId = $leaveReq['json']['id'] ?? null;
+    ok('Member request leave', ($leaveReq['json']['ok'] ?? false) === true && $leaveId, $leaveReq['body']);
+} else {
+    ok('Member request leave', false, 'skipped — leave fixture precondition failed');
+}
 
 $adminLeaveBlock = http($adminJar, 'POST', "$BASE/api/leave.php", [
     'action' => 'request',
@@ -402,13 +466,29 @@ $adminLeaveBlock = http($adminJar, 'POST', "$BASE/api/leave.php", [
 ]);
 ok('Admin cannot submit leave', ($adminLeaveBlock['json']['ok'] ?? true) === false);
 
-$decide = http($adminJar, 'POST', "$BASE/api/leave.php", [
-    'action' => 'decide',
-    'id' => $leaveId,
-    'status' => 'approved',
-    'note' => 'QA approved',
-]);
-ok('Admin approve leave', ($decide['json']['ok'] ?? false) === true, $decide['body']);
+if ($leaveId) {
+    $decide = http($adminJar, 'POST', "$BASE/api/leave.php", [
+        'action' => 'decide',
+        'id' => $leaveId,
+        'status' => 'approved',
+        'note' => 'QA approved',
+    ]);
+    ok('Admin approve leave', ($decide['json']['ok'] ?? false) === true, $decide['body']);
+} else {
+    ok('Admin approve leave', false, 'skipped — no leave request id');
+}
+
+// Drop this suite's leave rows so the next run does not burn yearly entitlement.
+try {
+    if ($memberId) {
+        $n = purge_qa_integration_leave(local_sp_work_pdo(), (int)$memberId);
+        ok('Leave fixture: post-workflow cleanup', true, 'removed='.$n);
+    } else {
+        ok('Leave fixture: post-workflow cleanup', false, 'memberId missing');
+    }
+} catch (Throwable $e) {
+    ok('Leave fixture: post-workflow cleanup', false, $e->getMessage());
+}
 
 // ── 9. Warnings (3-strike salary deduction) ──────────────────────────────────
 echo "\n9. Warnings\n";
