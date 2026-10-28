@@ -72,5 +72,6 @@ json_response(['ok'=>true,'onlineIds'=>$onlineIds,'lastSeen'=>$lastSeen,
     'latestHistory'=>$latestHistory,'latestFollowUp'=>$latestFollowUp,'latestFuCompleted'=>$latestFuCompleted,
     'pendingApprovals'=>$pendingApprovals,'unreadNotifications'=>$unreadNotifications,
     'unreadMessages'=>$unreadMessages,'unreadAnnouncements'=>$unreadAnnouncements,
-    'pendingLeaves'=>$pendingLeaves
+    'pendingLeaves'=>$pendingLeaves,
+    'csrf'=>csrf_token()
 ]);
