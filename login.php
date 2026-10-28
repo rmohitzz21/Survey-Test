@@ -8,7 +8,7 @@ require_no_auth('index.php');
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Survey Pacific — Work Journey</title>
+<title>Survey Pacific Work Journey</title>
 <link rel="icon" type="image/png" href="image.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -95,7 +95,7 @@ require_no_auth('index.php');
 <!-- Main content -->
 <main class="relative z-10 flex-1 flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-16 px-4 sm:px-8 md:px-14 pt-6 sm:pt-10 pb-8 max-w-[1200px] w-full mx-auto">
 
-  <!-- Left — hero copy -->
+  <!-- Left hero copy -->
   <div class="flex-1 flex flex-col justify-center anim-fade-up" style="max-width:560px">
     <div class="inline-flex items-center gap-2 self-start rounded-full px-3 py-1.5 mb-6"
          style="background:rgba(18,104,243,0.10);border:1px solid rgba(18,104,243,0.18)">
@@ -144,7 +144,7 @@ require_no_auth('index.php');
     </div>
   </div>
 
-  <!-- Right — auth card -->
+  <!-- Right auth card -->
   <div class="w-full lg:w-auto shrink-0 anim-fade-up-late" style="width:100%;max-width:404px">
     <div class="relative rounded-[18px] px-7 pt-8 pb-7 overflow-hidden"
          style="background:var(--sp-card-bg);box-shadow:0 24px 60px -12px rgba(7,29,43,0.22),0 2px 6px rgba(7,29,43,0.06);border:1px solid var(--sp-card-border)">
@@ -166,7 +166,13 @@ require_no_auth('index.php');
         <h2 class="text-[21px] font-bold mb-1" style="color:var(--sp-navy)"
             x-text="mode==='login' ? 'Employee Login' : 'Request Access'"></h2>
         <p class="text-[12px]" style="color:var(--sp-muted)"
-           x-text="mode==='login' ? 'Survey Pacific employees can sign in below.' : 'Submit a request — an admin will review and approve.'"></p>
+           x-text="mode==='login' ? 'Survey Pacific employees can sign in below.' : 'Submit a request an admin will review and approve.'"></p>
+      </div>
+
+      <!-- Session ran out rather than a failed attempt — say which. -->
+      <div x-show="signedOut && !error" x-cloak class="flex items-start gap-2 text-[12px] bg-[#FFFAEB] border border-[#FEF0C7] rounded-[8px] px-3 py-2.5 mb-4" style="color:#B54708">
+        <svg class="w-3.5 h-3.5 mt-px shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <span>Your session timed out. Please sign in again.</span>
       </div>
 
       <!-- Notice -->
@@ -291,6 +297,9 @@ function loginApp() {
     name: '', email: '', password: '', confirm: '',
     showPw: false, loading: false,
     error: '', notice: '',
+    // index.php sends ?expired=1 when an api/ call came back 401, so the redirect
+    // explains itself instead of looking like a random bounce to the login screen.
+    signedOut: new URLSearchParams(location.search).has('expired'),
     darkMode: localStorage.getItem('sp_theme')==='dark',
     toggleDarkMode(){ this.darkMode=!this.darkMode; localStorage.setItem('sp_theme', this.darkMode?'dark':'light'); },
 

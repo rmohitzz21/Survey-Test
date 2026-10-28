@@ -1,1 +1,16 @@
+# Uploads are served only through authenticated PHP (api/serve.php).
+# Deny all direct HTTP access, including accidental .php uploads.
+Require all denied
+<IfModule !mod_authz_core.c>
 Deny from all
+</IfModule>
+Options -Indexes
+Options -ExecCGI
+RemoveHandler .php .phtml .php3 .php4 .php5 .php7 .php8 .phar
+RemoveType .php .phtml .php3 .php4 .php5 .php7 .php8 .phar
+<FilesMatch "\.(?i:php|phtml|phar|cgi|pl)$">
+  Require all denied
+  <IfModule !mod_authz_core.c>
+  Deny from all
+  </IfModule>
+</FilesMatch>

@@ -5,7 +5,8 @@ require_once '../includes/functions.php';
 sp_session_start();
 require_auth_json();
 
-$b      = get_json_body();
+$b = get_json_body();
+require_csrf($b);
 $action = $b['action'] ?? '';
 $user   = current_user();
 

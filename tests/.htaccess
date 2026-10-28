@@ -1,0 +1,10 @@
+# Test scripts are run from the CLI only (php tests\<name>-test.php / node).
+# None of them carry a PHP_SAPI guard, so an HTTP hit would execute them against
+# the live database. Deny here as well as in the root .htaccess, so the block
+# survives a host without mod_rewrite.
+Require all denied
+<IfModule !mod_authz_core.c>
+Order deny,allow
+Deny from all
+</IfModule>
+Options -Indexes

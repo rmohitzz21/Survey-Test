@@ -1,0 +1,38 @@
+# Secrets — copy from .env.example; never commit real credentials
+.env
+.env.local
+.env.*.local
+
+# One-off credential migrates — never commit
+scripts/migrate-shalini-password.php
+scripts/migrate-shalini-password.sql
+
+# Runtime sessions (created by sp_session_start())
+storage/
+
+# Agent / brainstorm scratch
+.superpowers/
+.claude/
+
+# Scratch
+Dummy/
+
+# OS / IDE
+.DS_Store
+Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+.idea/
+.vscode/
+
+# User uploads — keep deny rules + empty dir markers; never commit real files.
+# Un-ignore directories first so .gitkeep negation can apply (git ignore quirk).
+uploads/**
+!uploads/.htaccess
+!uploads/**/
+!uploads/**/.gitkeep
+
+# Local build/cache noise (Tailwind rebuild is manual)
+node_modules/
+npm-debug.log*

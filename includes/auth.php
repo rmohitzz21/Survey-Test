@@ -1,16 +1,47 @@
 <?php
+/**
+ * True when the browser reached us over TLS.
+ *
+ * isset($_SERVER['HTTPS']) was wrong twice over: Apache/IIS set HTTPS to the
+ * literal string 'off' on plain HTTP, and isset() is true for 'off' — so an HTTP
+ * request got a Secure cookie the browser then refused to store. Behind a proxy
+ * or CDN (which is how the live host serves inquiry.surveypacific.com) PHP sees
+ * plain HTTP and the forwarded headers are the only evidence of TLS.
+ */
+function sp_is_https(): bool {
+    if (!empty($_SERVER['HTTPS']) && strtolower((string)$_SERVER['HTTPS']) !== 'off') return true;
+    if (strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '')) === 'https')   return true;
+    if (strtolower((string)($_SERVER['HTTP_X_FORWARDED_SSL']   ?? '')) === 'on')      return true;
+    return (int)($_SERVER['SERVER_PORT'] ?? 0) === 443;
+}
+
 function sp_session_start(): void {
-    if (session_status() === PHP_SESSION_NONE) {
-        session_name('sp_work_session');
-        session_set_cookie_params([
-            'lifetime' => 0,
-            'path'     => '/',
-            'secure'   => isset($_SERVER['HTTPS']),
-            'httponly' => true,
-            'samesite' => 'Lax',
-        ]);
-        session_start();
+    if (session_status() !== PHP_SESSION_NONE) return;
+
+    // Keep session files out of the shared /tmp this host hands every tenant: a
+    // neighbour's GC sweep runs on their gc_maxlifetime, not ours, and deletes our
+    // files early — which logs people out mid-work on live but never on XAMPP.
+    // Only switch when the directory is actually usable, so a read-only deploy
+    // silently keeps the default rather than breaking login outright.
+    $dir = dirname(__DIR__) . '/storage/sessions';
+    if (!is_dir($dir)) @mkdir($dir, 0700, true);
+    if (is_dir($dir) && is_writable($dir)) {
+        // The path sits under the docroot, so refuse web access to the files in it.
+        if (!file_exists($dir . '/.htaccess'))
+            @file_put_contents($dir . '/.htaccess', "Require all denied\n<IfModule !mod_authz_core.c>\nDeny from all\n</IfModule>\n");
+        session_save_path($dir);
+        ini_set('session.gc_maxlifetime', '28800'); // 8h — one working day, not 24 min
     }
+
+    session_name('sp_work_session');
+    session_set_cookie_params([
+        'lifetime' => 0,               // cookie dies with the browser; the server side is the real clock
+        'path'     => '/',
+        'secure'   => sp_is_https(),
+        'httponly' => true,
+        'samesite' => 'Lax',
+    ]);
+    session_start();
 }
 
 function require_auth(string $redirect = '../login.php'): void {
@@ -25,6 +56,31 @@ function require_auth_json(): void {
     sp_session_start();
     if (empty($_SESSION['user'])) {
         json_response(['ok' => false, 'message' => 'Session expired. Please refresh the page.', 'expired' => true], 401);
+    }
+}
+
+/** Staff = everyone except Client portal accounts. */
+function is_client(): bool {
+    return ($_SESSION['user']['role'] ?? '') === 'Client';
+}
+
+function require_staff_json(): void {
+    require_auth_json();
+    if (is_client()) {
+        json_response(['ok' => false, 'message' => 'Client accounts cannot use this action.'], 403);
+    }
+}
+
+/** One-off repair / migrate tools — Master Admin session only (no shared URL tokens). */
+function require_utility_master_admin(string $loginRedirect = 'login.php'): void {
+    sp_session_start();
+    if (empty($_SESSION['user'])) {
+        header('Location: ' . $loginRedirect . '?next=' . urlencode($_SERVER['REQUEST_URI'] ?? ''));
+        exit;
+    }
+    if (!is_master_admin()) {
+        http_response_code(403);
+        die('Forbidden — Master Admin login required for this utility.');
     }
 }
 
@@ -47,6 +103,41 @@ function is_admin(): bool {
 
 function is_master_admin(): bool {
     return ($_SESSION['user']['role'] ?? '') === 'Master Admin';
+}
+
+function csrf_token(): string {
+    sp_session_start();
+    if (empty($_SESSION['csrf_token']) || !is_string($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    }
+    return $_SESSION['csrf_token'];
+}
+
+function csrf_token_refresh(): string {
+    sp_session_start();
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+    return $_SESSION['csrf_token'];
+}
+
+/**
+ * Enforce CSRF on state-changing requests. Accepts X-CSRF-Token header,
+ * csrf form field, or JSON body _csrf / csrf.
+ */
+function require_csrf(?array $body = null): void {
+    $method = strtoupper($_SERVER['REQUEST_METHOD'] ?? 'GET');
+    if (!in_array($method, ['POST', 'PUT', 'PATCH', 'DELETE'], true)) return;
+
+    $sent = $_SERVER['HTTP_X_CSRF_TOKEN']
+        ?? $_POST['csrf']
+        ?? $_POST['_csrf']
+        ?? null;
+    if (($sent === null || $sent === '') && is_array($body)) {
+        $sent = $body['csrf'] ?? $body['_csrf'] ?? null;
+    }
+    $expected = $_SESSION['csrf_token'] ?? '';
+    if (!$expected || !$sent || !hash_equals($expected, (string)$sent)) {
+        json_response(['ok' => false, 'message' => 'Invalid or missing security token. Refresh the page and try again.'], 403);
+    }
 }
 
 function json_response(array $data, int $status = 200): never {

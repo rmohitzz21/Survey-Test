@@ -1,0 +1,10 @@
+# Server-side includes only (db.php, auth.php, env.php, functions.php, schema-update.php).
+# Nothing here is ever fetched over HTTP. The root .htaccess already denies this
+# path via mod_rewrite; this file keeps the deny in force if mod_rewrite is not
+# available on the host.
+Require all denied
+<IfModule !mod_authz_core.c>
+Order deny,allow
+Deny from all
+</IfModule>
+Options -Indexes

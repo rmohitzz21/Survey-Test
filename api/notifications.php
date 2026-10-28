@@ -14,6 +14,7 @@ if ($method === 'GET') {
 
 if ($method === 'POST') {
     $b = get_json_body();
+    require_csrf($b);
     if (($b['action']??'') === 'mark_read') {
         $pdo->prepare("UPDATE notifications SET is_read=1 WHERE account_id=?")->execute([$user['id']]);
         json_response(['ok'=>true]);

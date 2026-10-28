@@ -4,16 +4,19 @@ require_once '../includes/auth.php';
 require_once '../includes/db.php';
 require_once '../includes/functions.php';
 sp_session_start();
-require_auth_json();
+require_staff_json();
 
 $method = $_SERVER['REQUEST_METHOD'];
 $b      = get_json_body();
+require_csrf($b);
 $action = $b['action'] ?? '';
 $user   = current_user();
 
 // ─── Load History (lazy) ─────────────────────────────────────────────────────
 if ($action === 'load_history') {
     $id = $b['id'] ?? '';
+    if (!can_access_inquiry($pdo, $id, $user))
+        json_response(['ok'=>false,'message'=>'Not authorised to view this inquiry history.'], 403);
     $stmt = $pdo->prepare("SELECT * FROM stage_history WHERE inquiry_id=? ORDER BY id DESC");
     $stmt->execute([$id]);
     json_response(['ok'=>true, 'data'=>$stmt->fetchAll()]);
@@ -31,7 +34,23 @@ if ($action === 'stage_update') {
             json_response(['ok'=>false,'message'=>'Only admins or the inquiry creator can update the stage.'], 403);
         }
     }
-    $pdo->prepare("UPDATE inquiries SET stage=?,outcome=?,outcome_reason=?,proposal_value=?,delivery_date=?,follow_up_date=?,final_value=? WHERE id=?")
+    // An inquiry cannot be completed while a task on it is still open. Server-side because the
+    // quick-complete modal and the full stage form both land here.
+    if (is_completing_inquiry($b['stage'] ?? '', $b['outcome'] ?? '')) {
+        $openSteps = open_step_names($pdo, $id);
+        if ($openSteps) {
+            $shown = array_map(fn($t) => mb_strimwidth(trim($t), 0, 40, '…'), array_slice($openSteps, 0, 3));
+            json_response(['ok'=>false, 'openSteps'=>count($openSteps),
+                'message'=>'Cannot complete this inquiry — '.count($openSteps).' task'.(count($openSteps)===1?'':'s')
+                    .' still open: '.implode(', ', $shown).(count($openSteps) > 3 ? ' …' : '')
+                    .'. Mark them Done or Cancelled first.'], 409);
+        }
+    }
+
+    // Stamp when the inquiry actually closed, so a closure past its due date stays reportable as
+    // late. COALESCE keeps the first closure time; reopening clears it.
+    $closedAt = is_closed_inquiry($b['stage'] ?? '', $b['outcome'] ?? '') ? 'COALESCE(closed_at,NOW())' : 'NULL';
+    $pdo->prepare("UPDATE inquiries SET stage=?,outcome=?,outcome_reason=?,proposal_value=?,delivery_date=?,follow_up_date=?,final_value=?,closed_at=$closedAt WHERE id=?")
         ->execute([$b['stage'],$b['outcome'],$b['outcomeReason']??null,$b['proposalValue']??null,$b['deliveryDate']??null,$b['followUpDate']??null,$b['finalValue']??null,$id]);
     $pdo->prepare("INSERT INTO stage_history (inquiry_id,stage,outcome,outcome_reason,by_user,date,remark,final_remark) VALUES (?,?,?,?,?,?,?,?)")
         ->execute([$id,$b['stage'],$b['outcome'],$b['outcomeReason']??'',$user['name'],date('d M Y · H:i'),$b['remark']??'',$b['finalRemark']??'']);
@@ -69,12 +88,22 @@ if ($action === 'add_step') {
         }
     }
     $due = $b['due'] ?? 'TBD';
+    // Internal Usage inquiries are same-day work — force step due to today (time still allowed).
+    $typeStmt = $pdo->prepare("SELECT inquiry_type FROM inquiries WHERE id=?");
+    $typeStmt->execute([$b['inquiryId'] ?? '']);
+    $inqType = $typeStmt->fetchColumn() ?: '';
+    if ($inqType === 'Internal Usage') {
+        $due = date('Y-m-d');
+        if (empty($b['dueTime'])) $b['dueTime'] = date('H:i');
+    }
     if ($due && preg_match('/^\d{4}-\d{2}-\d{2}$/', $due)) {
         $due = date('d M Y', strtotime($due));
         if (!empty($b['dueTime'])) $due .= ' · '.date('h:i A', strtotime($b['dueTime']));
     }
     $ins = $pdo->prepare("INSERT INTO inquiry_steps (inquiry_id,assigned_by,assigned_to,instruction,status,due) VALUES (?,?,?,?,?,?)");
-    $ins->execute([$b['inquiryId'],$user['name'],$b['assignedTo'],$b['instruction'],'New',$due]);
+    // A freshly assigned task is Pending — nobody has started it yet. 'Overdue' is never stored:
+    // it is derived from the due date in load_inquiries() and flips on its own when the clock passes.
+    $ins->execute([$b['inquiryId'],$user['name'],$b['assignedTo'],$b['instruction'],'Pending',$due]);
     $stepId = (int)$pdo->lastInsertId();
     $pdo->prepare("UPDATE inquiries SET current_owner=? WHERE id=?")->execute([$b['assignedTo'],$b['inquiryId']]);
     $instruction = $b['instruction'] ?? '';
@@ -82,7 +111,6 @@ if ($action === 'add_step') {
     notify_user($pdo, $b['assignedTo'], 'New task — '.$b['inquiryId'], $user['name'].' assigned: '.$preview, $b['inquiryId']);
     json_response(['ok'=>true,'stepId'=>$stepId,'data'=>load_inquiries($pdo,$user)]);
 }
-
 // ─── Update Step Status ───────────────────────────────────────────────────────
 if ($action === 'step_status') {
     $newStatus = $b['status'] ?? '';
@@ -97,16 +125,16 @@ if ($action === 'step_status') {
         FROM inquiry_steps s JOIN inquiries i ON i.id=s.inquiry_id WHERE s.id=?");
     $sinfo->execute([$stepId]);
     $srow = $sinfo->fetch();
+    if (!$srow) json_response(['ok'=>false,'message'=>'Step not found.'], 404);
 
-    // Assignee can mark their own task Done; Rejected is restricted to assigner/creator/admin
-    if (in_array($newStatus, ['Done','Completed'])) {
-        if (!is_admin()
-            && ($srow['assigned_by'] ?? '') !== $user['name']
-            && ($srow['created_by']  ?? '') !== $user['name']
-            && ($srow['assigned_to'] ?? '') !== $user['name']) {
-            json_response(['ok'=>false,'message'=>'Only the task assigner, assignee, or an admin can mark a step as completed.'], 403);
-        }
-    }
+    $isParty = is_admin()
+        || ($srow['assigned_by'] ?? '') === $user['name']
+        || ($srow['assigned_to'] ?? '') === $user['name']
+        || ($srow['created_by']  ?? '') === $user['name'];
+    if (!$isParty)
+        json_response(['ok'=>false,'message'=>'Only the assignee, assigner, inquiry creator, or an admin can update this step.'], 403);
+
+    // Rejected is restricted to assigner/creator/admin (assignee cannot self-reject as approval)
     if ($newStatus === 'Rejected') {
         if (!is_admin()
             && ($srow['assigned_by'] ?? '') !== $user['name']
@@ -115,7 +143,10 @@ if ($action === 'step_status') {
         }
     }
 
-    $pdo->prepare("UPDATE inquiry_steps SET status=? WHERE id=?")->execute([$newStatus, $stepId]);
+    // Same for tasks: record the submit time so a task handed in past its due keeps reading as
+    // late once `overdue` flips off. Re-clicking Done must not move the stamp — COALESCE holds it.
+    $completedAt = in_array($newStatus, ['Done','Completed']) ? 'COALESCE(completed_at,NOW())' : 'NULL';
+    $pdo->prepare("UPDATE inquiry_steps SET status=?, completed_at=$completedAt WHERE id=?")->execute([$newStatus, $stepId]);
 
     if ($srow) {
         $preview = mb_strimwidth(strip_tags($srow['instruction']), 0, 60, '…');
@@ -241,6 +272,12 @@ if ($action === 'update_step_due') {
             json_response(['ok'=>false,'message'=>'Only the task assigner, inquiry creator, or an admin can change the due date.'], 403);
     }
     $due = $b['due'] ?? 'TBD';
+    $typeChk = $pdo->prepare("SELECT i.inquiry_type FROM inquiry_steps s JOIN inquiries i ON i.id=s.inquiry_id WHERE s.id=?");
+    $typeChk->execute([$b['stepId']]);
+    if ($typeChk->fetchColumn() === 'Internal Usage') {
+        $due = date('Y-m-d');
+        if (empty($b['dueTime'])) $b['dueTime'] = date('H:i');
+    }
     if ($due && preg_match('/^\d{4}-\d{2}-\d{2}$/', $due)) {
         $due = date('d M Y', strtotime($due));
         if (!empty($b['dueTime'])) $due .= ' · '.date('h:i A', strtotime($b['dueTime']));

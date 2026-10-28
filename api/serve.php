@@ -4,6 +4,27 @@ require_once '../includes/db.php';
 sp_session_start();
 require_auth_json();
 
+// ── Shared resource (any signed-in user; filename comes from the DB) ──────────
+$resourceId = (int)($_GET['resource_id'] ?? 0);
+if ($resourceId) {
+    $stmt = $pdo->prepare("SELECT filename FROM resources WHERE id=?");
+    $stmt->execute([$resourceId]);
+    $fn = $stmt->fetchColumn();
+    if ($fn === false) { http_response_code(404); exit('Not found'); }
+    $path = dirname(__DIR__).'/uploads/resources/'.basename($fn);
+    if (!file_exists($path)) { http_response_code(404); exit('File missing'); }
+    $mime = mime_content_type($path) ?: 'application/octet-stream';
+    // Preview in-browser only for formats a browser renders without script.
+    $viewable = ['application/pdf','image/jpeg','image/png','image/gif','text/plain'];
+    $inline   = !empty($_GET['inline']) && in_array($mime, $viewable, true);
+    header('Content-Type: '.$mime);
+    header('X-Content-Type-Options: nosniff');
+    header(($inline ? 'Content-Disposition: inline; filename="' : 'Content-Disposition: attachment; filename="').rawurlencode($fn).'"');
+    header('Content-Length: '.filesize($path));
+    readfile($path);
+    exit;
+}
+
 $filename = basename($_GET['file'] ?? '');
 if (!$filename) { http_response_code(400); exit('Bad request'); }
 
@@ -26,6 +47,27 @@ if ($inquiryId) {
         }
     }
     $path = dirname(__DIR__).'/uploads/inq/'.$inquiryId.'/'.$filename;
+    if (!file_exists($path)) { http_response_code(404); exit('File missing'); }
+    $mime = mime_content_type($path) ?: 'application/octet-stream';
+    header('Content-Type: '.$mime);
+    header('Content-Disposition: attachment; filename="'.rawurlencode($filename).'"');
+    header('Content-Length: '.filesize($path));
+    readfile($path);
+    exit;
+}
+
+// ── Message attachment ────────────────────────────────────────────────────────
+$msgId = (int)($_GET['msg_id'] ?? 0);
+if ($msgId) {
+    $user = current_user();
+    $stmt = $pdo->prepare("SELECT sender_id,receiver_id,attachment FROM messages WHERE id=?");
+    $stmt->execute([$msgId]);
+    $row = $stmt->fetch();
+    if (!$row || $row['attachment'] !== $filename) { http_response_code(404); exit('Not found'); }
+    if ((int)$row['sender_id'] !== (int)$user['id'] && (int)$row['receiver_id'] !== (int)$user['id']) {
+        http_response_code(403); exit('Forbidden');
+    }
+    $path = dirname(__DIR__).'/uploads/msg/'.$msgId.'/'.$filename;
     if (!file_exists($path)) { http_response_code(404); exit('File missing'); }
     $mime = mime_content_type($path) ?: 'application/octet-stream';
     header('Content-Type: '.$mime);

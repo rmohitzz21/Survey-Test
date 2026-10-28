@@ -97,6 +97,47 @@ body.dark-mode input[readonly],
 body.dark-mode .cursor-not-allowed{background:#0F1319!important;color:#6B7685!important;}
 body.dark-mode ::-webkit-scrollbar-thumb{background:#2A323D;}
 
+/* Inquiry month grid (raw classes, not utilities — needs its own overrides) */
+body.dark-mode .cal-cell{background:#151B23;border-color:#2A323D;}
+body.dark-mode .cal-cell:hover{background:#1E2630;border-color:#39424F;}
+body.dark-mode .cal-cell.is-weekend{background:#12171E;}
+body.dark-mode .cal-cell.is-weekend:hover{background:#1E2630;}
+body.dark-mode .cal-cell.is-sunday{background:#1A1630;border-color:#3D3470;}
+body.dark-mode .cal-cell.is-sunday:hover{background:#221C3E;}
+body.dark-mode .cal-cell.is-sunday .cal-num{color:#BDB4FE;}
+body.dark-mode .cal-cell.is-holiday{background:#1A1630;border-color:#3D3470;}
+body.dark-mode .cal-cell.is-festival{background:#2A1F0A;border-color:#7A5C1E;}
+body.dark-mode .cal-cell.is-festival .cal-num{color:#FEC84B;}
+body.dark-mode .cal-cell.is-holiday .cal-num{color:#BDB4FE;}
+body.dark-mode .cal-cell.is-sunday .cal-hol-label,
+body.dark-mode .cal-hol-label{color:#BDB4FE;}
+body.dark-mode .cal-cell.is-festival .cal-hol-label{color:#FEC84B;}
+body.dark-mode .cal-cell.is-holiday .cal-hol-label{color:#BDB4FE;}
+body.dark-mode .cal-cell.has-inq{background:#12291F;border-color:#1F5138;}
+body.dark-mode .cal-row{background:#151B23;border-color:#2A323D;}
+body.dark-mode .cal-row:hover{background:#1E2630;border-color:#39424F;}
+body.dark-mode .cal-legend-item{color:#8B95A5;}
+body.dark-mode .cal-sec-title h3{color:#E8EDF4;}
+body.dark-mode .cal-hol-form input,
+body.dark-mode .cal-hol-form select{background:#151B23;border-color:#2A323D;color:#E8EDF4;}
+body.dark-mode .sp-stat-grid .stat-tile .stat-num{color:#E8EDF4;}
+body.dark-mode .inq-pager{background:#151B23;border-color:#2A323D;}
+body.dark-mode .inq-pager .text-\[\#667085\],
+body.dark-mode .inq-pager{color:#8B95A5;}
+body.dark-mode .cal-cell.has-inq:hover{background:#183527;border-color:#2A6B4A;}
+body.dark-mode .cal-cell.has-inq .cal-pill{background:#2F9E63;color:#04140C;}
+body.dark-mode .cal-cell.is-today{border-color:#5B9BFF;}
+body.dark-mode .cal-cell.is-sel{background:#16223A;border-color:#5B9BFF;box-shadow:0 0 0 2px rgba(91,155,255,.25);}
+body.dark-mode .cal-num{color:#C6CDD8;}
+body.dark-mode .cal-cell.is-today .cal-num{background:#1268F3;color:#fff;}
+body.dark-mode .cal-cell.is-sel .cal-num{color:#6DA8FF;}
+body.dark-mode .cal-cell.is-sel.is-today .cal-num{color:#fff;}
+body.dark-mode .cal-pill{background:#0F2B20;color:#4ADE80;}
+body.dark-mode .cal-pill.is-fu{background:#332913;color:#FBBF24;}
+body.dark-mode .cal-head{color:#6B7685;}
+body.dark-mode .cal-head.is-weekend{color:#4A5462;}
+body.dark-mode .inq-name{color:#E8EDF4;}
+
 /* Flatpickr popup (appended to <body>, so this reaches it) */
 body.dark-mode .flatpickr-calendar{background:#151B23!important;border-color:#2A323D!important;box-shadow:0 8px 32px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3)!important;}
 body.dark-mode .flatpickr-day{color:#C6CDD8!important;}
@@ -111,3 +152,53 @@ body.dark-mode .flatpickr-time input.flatpickr-minute{color:#C6CDD8!important;ba
 body.dark-mode .numInputWrapper:hover,
 body.dark-mode .flatpickr-time input:focus,
 body.dark-mode .flatpickr-time input:hover{background:#1E2A3D!important;}
+
+/* Due-soon warning popup (self-contained — don't rely on Tailwind hex utilities) */
+.sp-due-warn-card{background:#ffffff;border:1px solid #E4E7EC}
+.sp-due-warn-head{background:linear-gradient(135deg,#FEF3F2,#FFFAEB);border-bottom:1px solid #FDE68A}
+.sp-due-warn-icon{background:#FEF3F2}
+.sp-due-warn-title{color:#071D2B}
+.sp-due-warn-sub,.sp-due-warn-hint,.sp-due-warn-x{color:#667085}
+.sp-due-warn-item{background:#FFFAFA;border:1px solid #FECDCA}
+.sp-due-warn-item:hover{border-color:#B42318;background:#FFF5F5}
+.sp-due-warn-id{color:#1268F3}
+.sp-due-warn-label{color:#172B3A}
+.sp-due-warn-badge{background:#FEF3F2;color:#B42318}
+.sp-due-warn-foot{border-top:1px solid #E4E7EC;background:#fff}
+.sp-due-warn-dismiss{background:#F2F4F7;color:#344054}
+.sp-due-warn-dismiss:hover{background:#E4E7EC}
+
+body.dark-mode .sp-due-warn-card{background:#1B222B;border-color:#2A323D}
+body.dark-mode .sp-due-warn-head{background:linear-gradient(135deg,#3A1A1C,#332913);border-bottom-color:#5C2323}
+body.dark-mode .sp-due-warn-icon{background:#34191A}
+body.dark-mode .sp-due-warn-title{color:#F9FAFB}
+body.dark-mode .sp-due-warn-sub,
+body.dark-mode .sp-due-warn-hint,
+body.dark-mode .sp-due-warn-x{color:#93A0B4}
+body.dark-mode .sp-due-warn-item{background:#241A1B;border-color:#5C2323}
+body.dark-mode .sp-due-warn-item:hover{border-color:#F87171;background:#2C1C1E}
+body.dark-mode .sp-due-warn-id{color:#5B9BFF}
+body.dark-mode .sp-due-warn-label{color:#E9ECF1}
+body.dark-mode .sp-due-warn-badge{background:#34191A;color:#F87171}
+body.dark-mode .sp-due-warn-foot{border-top-color:#2A323D;background:#1B222B}
+body.dark-mode .sp-due-warn-dismiss{background:#232A33;color:#C6CDD8}
+body.dark-mode .sp-due-warn-dismiss:hover{background:#2A323D}
+
+/* Due-soon popup — centered when open.
+   Do NOT use display:flex!important — that fights Alpine x-show (display:none)
+   and the dialog never closes. */
+.sp-due-warn-backdrop{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:16px;
+  box-sizing:border-box;
+}
+.sp-due-warn-backdrop > .sp-due-warn-card{
+  width:100%;
+  max-width:400px;
+  max-height:min(85dvh,560px);
+  border-radius:14px;
+  margin:0 auto;
+  flex-shrink:0;
+}
