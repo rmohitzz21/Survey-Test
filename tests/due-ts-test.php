@@ -55,5 +55,10 @@ eq(is_closed_inquiry('Proposal Sent', 'Lost'),     true,  'closing outcome alone
 eq(is_closed_inquiry('Project Closed', 'In Progress'), true, 'closing stage alone');
 eq(is_closed_inquiry('Proposal Sent', 'In Progress'), false, 'still open');
 eq(is_closed_inquiry(null, null), false, 'nulls are not closed');
+// A lost project is finished work, not open work — the Ownership Status picker offers it under
+// Closed, so is_closed_inquiry() has to agree or the dashboard contradicts the picker.
+eq(is_closed_inquiry('Decision', 'Project Lost'), true, 'Project Lost closes the inquiry');
+// 'No Reply' is the client going quiet, which is not a closure.
+eq(is_closed_inquiry('Communication / Proposal', 'No Reply'), false, 'No Reply is still open');
 
 echo "ok\n";
