@@ -1,0 +1,319 @@
+﻿/* Survey Pacific — mobile / tablet polish (loaded after app.css) */
+:root {
+  --sp-safe-top: env(safe-area-inset-top, 0px);
+  --sp-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --sp-safe-left: env(safe-area-inset-left, 0px);
+  --sp-safe-right: env(safe-area-inset-right, 0px);
+}
+html { height: 100%; height: 100dvh; }
+html, body {
+  height: 100%;
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}
+body.app-shell {
+  padding: var(--sp-safe-top) var(--sp-safe-right) var(--sp-safe-bottom) var(--sp-safe-left);
+}
+body.sp-drawer-open { touch-action: none; }
+
+.sp-scroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+  scroll-behavior: smooth;
+}
+.sp-hscroll {
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+  /* ponytail: overflow-x:auto forces overflow-y:auto, which makes this a dead
+     vertical scroller that can swallow a touch swipe. hidden keeps it out of
+     the vertical scroll chain so the page scrolls instead. */
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+@keyframes spSheetUp {
+  from { transform: translateY(18px); opacity: .65; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@keyframes spFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.inq-table-wrap {
+  border: 1px solid #D1D9E6;
+  border-radius: 10px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  box-shadow: 0 2px 8px rgba(7,29,43,0.07);
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+.inq-table-wrap .inq-row,
+.inq-table-wrap .inq-col-header { min-width: 1220px; }
+/* ponytail: app.css is a purged build with no sm: variants, so sm:w-auto is dead
+   and the search box stretched full width. Sized here instead. */
+.sp-note-search { width: 260px; flex: 0 0 auto; }
+
+/* Notes — mini note cards. auto-fill keeps it responsive without sm:/md: variants,
+   which the purged app.css does not ship. whitespace-pre-line and break-words are
+   missing from it too, so the note text rules live here. */
+.sp-notes-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  align-items: start;
+}
+/* Every card is the same height whatever the note length — a long note clamps and
+   offers "View details" instead of stretching its row. */
+.sp-note-card { height: 220px; }
+.sp-note-card > .flex { height: 100%; }
+.sp-note-editing { grid-column: 1 / -1; height: auto; }  /* editing needs full width and room */
+.sp-note-title { overflow-wrap: anywhere; }
+.sp-note-body  { white-space: pre-line; overflow-wrap: anywhere; }
+.sp-note-card .sp-note-body {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.sp-note-editing .sp-note-body { display: block; overflow: visible; }
+.sp-stat-grid { display: grid; gap: 12px; grid-template-columns: repeat(4, minmax(0,1fr)); }
+.sp-filter-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; box-sizing: border-box; }
+.msg-shell { height: calc(100dvh - 130px); min-height: 360px; }
+.teams-shell { height: calc(100dvh - 200px); min-height: 420px; }
+
+@media (max-width: 767px) {
+  aside.sp-sidebar {
+    width: min(86vw, 300px) !important;
+    max-width: 300px;
+    padding-top: var(--sp-safe-top);
+    padding-bottom: var(--sp-safe-bottom);
+    transition: transform .24s cubic-bezier(.22,1,.36,1);
+    will-change: transform;
+  }
+  .sp-main-scroll { padding: 12px !important; }
+  .sp-topbar h1 {
+    font-size: 15px !important;
+    max-width: 36vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sp-cta { min-height: 34px; min-width: 34px; justify-content: center; }
+  .sp-cta-label { display: none; }
+  .sp-topbar-actions .border { display: none; }
+
+  .sp-stat-wrap { overflow: visible !important; margin: 0 0 12px !important; padding: 0 !important; }
+  .sp-stat-grid {
+    min-width: 0 !important;
+    grid-template-columns: repeat(2, minmax(0,1fr)) !important;
+    gap: 10px !important;
+  }
+  .sp-stat-grid .stat-tile { min-height: 72px; }
+
+  .sp-filter-wrap { overflow: visible !important; }
+  .sp-filter-bar {
+    min-width: 0 !important;
+    flex-wrap: wrap !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+  .sp-filter-bar > * { flex: 1 1 calc(50% - 4px); min-width: 140px; }
+  .sp-filter-bar .sp-filter-search { flex: 1 1 100%; min-width: 100% !important; }
+  .sp-note-search { width: 100%; }
+  .sp-filter-bar .sp-filter-divider { display: none !important; }
+  .sp-filter-bar .sp-filter-types {
+    flex: 1 1 100% !important;
+    min-width: 100% !important;
+    display: flex !important;
+    gap: 8px;
+  }
+  .sp-filter-bar .sp-filter-types > button { flex: 1 1 0; min-width: 0; }
+
+  .inq-table-wrap {
+    border: none !important;
+    box-shadow: none !important;
+    overflow: visible !important;
+    background: transparent !important;
+  }
+  .inq-table-wrap .inq-row { min-width: 0 !important; }
+  .inq-col-header { display: none !important; }
+  .inq-card {
+    border-radius: 12px !important;
+    margin: 0 0 10px !important;
+    border: 1px solid #E4E7EC !important;
+    box-shadow: 0 1px 4px rgba(7,29,43,0.05) !important;
+    overflow: hidden;
+    background: #fff !important;
+    animation: spFadeIn .18s ease;
+  }
+  body.dark-mode .inq-card { background: #151B23 !important; border-color: #2A323D !important; }
+  .inq-row { flex-wrap: wrap !important; }
+  .inq-cell {
+    width: 50% !important;
+    min-width: 0 !important;
+    flex: 1 1 50% !important;
+    border-right: none !important;
+    border-bottom: 1px solid #F2F4F7 !important;
+    padding: 10px 12px !important;
+    overflow: visible !important;
+  }
+  body.dark-mode .inq-cell { border-bottom-color: #1F2630 !important; }
+  .inq-cell-num {
+    width: auto !important;
+    flex: 0 0 auto !important;
+    border-bottom: none !important;
+    padding-right: 4px !important;
+  }
+  .inq-cell-id {
+    flex: 1 1 auto !important;
+    width: auto !important;
+    border-bottom: none !important;
+  }
+  .inq-cell-status {
+    flex: 1 1 50% !important;
+    width: 50% !important;
+  }
+  .inq-cell-req, .inq-cell-actions { flex: 1 1 100% !important; width: 100% !important; }
+  .inq-cell-actions {
+    justify-content: flex-end !important;
+    border-bottom: none !important;
+    padding-top: 8px !important;
+    padding-bottom: 10px !important;
+  }
+  .inq-card-label { display: block !important; }
+  .inq-cell .inq-ellipsis,
+  .inq-cell [style*="white-space:nowrap"] {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: unset !important;
+    word-break: break-word;
+  }
+
+  /* Expanded journey: stack action rows cleanly */
+  .inq-card .flex.items-start.justify-between { flex-wrap: wrap; }
+  .inq-card .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    margin: 0 -4px;
+    padding: 0 4px;
+  }
+
+  .msg-shell { height: calc(100dvh - 120px) !important; min-height: 280px !important; }
+  .msg-list-pane, .msg-thread-pane { min-height: 0; }
+  .teams-shell {
+    height: auto !important;
+    min-height: 0 !important;
+    flex-direction: column !important;
+  }
+  .teams-rail {
+    width: 100% !important;
+    max-height: 168px;
+    border-right: none !important;
+    border-bottom: 1px solid #E4E7EC;
+  }
+  .teams-rail .overflow-y-auto,
+  .teams-board .overflow-y-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+  .teams-board { min-height: 360px; }
+
+  /* Bottom sheets for centered modals */
+  div.fixed.inset-0.z-50.flex.items-center.justify-center {
+    align-items: flex-end !important;
+    padding: 0 !important;
+    padding-bottom: var(--sp-safe-bottom) !important;
+  }
+  div.fixed.inset-0.z-50.flex.items-center.justify-center > div.bg-white {
+    width: 100% !important;
+    max-width: 100% !important;
+    max-height: min(92dvh, 100%) !important;
+    border-radius: 16px 16px 0 0 !important;
+    animation: spSheetUp .22s cubic-bezier(.22,1,.36,1);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Side drawers stay full-height */
+  div.fixed.inset-0.z-50.flex.justify-end {
+    align-items: stretch !important;
+    padding: 0 !important;
+  }
+  div.fixed.inset-0.z-50.flex.justify-end > div {
+    width: min(100%, 420px) !important;
+    max-width: 100% !important;
+    height: 100% !important;
+    max-height: 100dvh !important;
+    border-radius: 0 !important;
+  }
+
+  /* Scalable data tables (leave / warnings / reminders / reports) */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+  .overflow-x-auto > table {
+    min-width: 640px;
+  }
+
+  .sp-toast-stack {
+    top: calc(12px + var(--sp-safe-top)) !important;
+    right: calc(12px + var(--sp-safe-right)) !important;
+    max-width: calc(100vw - 24px);
+  }
+
+  /* Calendar cells stay tappable */
+  .cal-cell { min-height: 48px; }
+}
+
+@media (max-width: 767px) {
+  .task-row {
+    flex-wrap: wrap !important;
+    align-items: flex-start !important;
+    gap: 8px 10px !important;
+    padding: 12px !important;
+  }
+  .task-row > .min-w-0.flex-1 { flex: 1 1 calc(100% - 20px) !important; min-width: 0 !important; }
+  .task-row-meta {
+    width: 100% !important;
+    max-width: 100% !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-start !important;
+    padding-left: 13px;
+    gap: 6px !important;
+  }
+  .task-row-meta .task-row-who { max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+
+  .inq-action-bar {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .inq-action-btns {
+    width: 100% !important;
+    justify-content: flex-start !important;
+  }
+  .inq-card .px-4.pt-3.pb-4 { padding-left: 12px !important; padding-right: 12px !important; }
+}
+
+@media (min-width: 768px) and (max-width: 1100px) {
+  .sp-stat-grid { grid-template-columns: repeat(2, minmax(0,1fr)) !important; min-width: 0 !important; }
+  .sp-stat-wrap { overflow: visible !important; }
+  .sp-filter-bar { min-width: 0 !important; flex-wrap: wrap !important; }
+  .inq-table-wrap .inq-row,
+  .inq-table-wrap .inq-col-header { min-width: 1180px; }
+}
+
+@media (max-width: 380px) {
+  .sp-stat-grid { grid-template-columns: 1fr !important; }
+  .sp-filter-bar > * { flex: 1 1 100%; min-width: 100%; }
+  .inq-cell { width: 100% !important; flex: 1 1 100% !important; }
+  .inq-cell-num, .inq-cell-id {
+    width: auto !important;
+    flex: 1 1 auto !important;
+  }
+  .inq-cell-num { flex: 0 0 auto !important; }
+}

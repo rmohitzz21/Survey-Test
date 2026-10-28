@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS accounts (
   email         VARCHAR(150)  NOT NULL UNIQUE,
   password_hash VARCHAR(255)  NOT NULL,
   role          VARCHAR(50)   NOT NULL DEFAULT 'Member',
+  role_description VARCHAR(600) NULL,        -- responsibilities blurb, not a document
   status        ENUM('approved','pending','rejected','blocked') NOT NULL DEFAULT 'pending',
   requested_at  DATE          NOT NULL,
   last_seen_at  TIMESTAMP     NULL,
@@ -25,6 +26,7 @@ CREATE TABLE IF NOT EXISTS inquiries (
   id             VARCHAR(20)  PRIMARY KEY,
   date           VARCHAR(20)  NOT NULL,
   inquiry_type   VARCHAR(20)  NOT NULL DEFAULT 'Client Project',
+  project_category VARCHAR(100) NULL,       -- Online / Offline / user-added from project_categories
   client         VARCHAR(150) NOT NULL,
   company        VARCHAR(150) NOT NULL,
   country        VARCHAR(100) NOT NULL DEFAULT 'India',
@@ -35,6 +37,8 @@ CREATE TABLE IF NOT EXISTS inquiries (
   current_owner  VARCHAR(100) NOT NULL,
   due_date       VARCHAR(20)  NOT NULL DEFAULT 'TBD',
   due_time       VARCHAR(5)   NULL,          -- 'HH:MM' 24h; NULL = end of due_date
+  slot_date      DATE         NULL,          -- internal booking day (Y-m-d)
+  slot_start     VARCHAR(5)   NULL,          -- 'HH:MM' start of 2h slot (from 10:00)
   stage          VARCHAR(100) NOT NULL DEFAULT 'Inquiry Received',
   outcome        VARCHAR(100) NOT NULL DEFAULT 'In Progress',
   outcome_reason VARCHAR(255),
@@ -48,7 +52,8 @@ CREATE TABLE IF NOT EXISTS inquiries (
   secondary_email VARCHAR(150),
   phone          VARCHAR(30),
   website        VARCHAR(255),
-  created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+  created_at     TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_inquiry_slot (slot_date, slot_start)
 );
 
 -- ─── Stage History ───────────────────────────────────────────────────────────
@@ -78,8 +83,11 @@ CREATE TABLE IF NOT EXISTS inquiry_steps (
   status      VARCHAR(50)  NOT NULL DEFAULT 'New',
   completed_at TIMESTAMP   NULL,                     -- set when status first becomes Done; > due = late
   due         VARCHAR(32)  NOT NULL DEFAULT 'TBD',   -- '01 Sep 2026 · 02:30 PM' = 22 chars
+  slot_date   DATE         NULL,                     -- workflow booking day (Y-m-d)
+  slot_start  VARCHAR(5)   NULL,                     -- 'HH:MM' start of 2h block
   created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (inquiry_id) REFERENCES inquiries(id) ON DELETE CASCADE
+  FOREIGN KEY (inquiry_id) REFERENCES inquiries(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_step_slot (slot_date, slot_start)
 );
 
 -- ─── Step Attachments ────────────────────────────────────────────────────────
@@ -131,6 +139,32 @@ CREATE TABLE IF NOT EXISTS messages (
   INDEX idx_conversation (sender_id, receiver_id, created_at)
 );
 
+-- ─── Call notes ──────────────────────────────────────────────────────────────
+-- Private personal notes per user. API only returns the signed-in account's rows.
+
+CREATE TABLE IF NOT EXISTS call_notes (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  account_id INT          NOT NULL,
+  title      VARCHAR(200) NOT NULL,
+  body       TEXT         NOT NULL,
+  created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP    NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+  INDEX idx_notes_account (account_id, updated_at)
+);
+
+-- ─── Resources ───────────────────────────────────────────────────────────────
+-- Shared document library: only Admin/Master Admin upload, every signed-in user
+-- can view and download. Files live in uploads/resources/.
+
+CREATE TABLE IF NOT EXISTS resources (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  title       VARCHAR(200) NOT NULL,
+  filename    VARCHAR(255) NOT NULL,
+  uploaded_by VARCHAR(100) NOT NULL,
+  created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 -- ─── Announcements ───────────────────────────────────────────────────────────
 -- Broadcast messages: only Admin/Master Admin post, all approved accounts can read.
 
@@ -169,7 +203,96 @@ CREATE TABLE IF NOT EXISTS leave_requests (
   INDEX idx_leave_status (status)
 );
 
+-- ─── Warnings ────────────────────────────────────────────────────────────────
+-- Admin / Master Admin issue warnings to a member. Every 3rd warning deducts ₹500
+-- from salary — the deduction is derived from the count, never stored.
+-- Always issued by hand: only an Admin / Master Admin can create or revoke one.
+
+CREATE TABLE IF NOT EXISTS warnings (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  account_id INT          NOT NULL,
+  reason     TEXT         NOT NULL,
+  issued_by  VARCHAR(100) NOT NULL,
+  created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE,
+  INDEX idx_warn_account (account_id)
+);
+
+-- ─── Calendar holidays ───────────────────────────────────────────────────────
+-- Sundays are automatic weekly holidays (no rows). Festivals and yearly company
+-- leave are stored here; admin can add / update / delete from the Calendar view.
+
+CREATE TABLE IF NOT EXISTS calendar_holidays (
+  id            INT AUTO_INCREMENT PRIMARY KEY,
+  holiday_date  DATE         NOT NULL,
+  title         VARCHAR(150) NOT NULL,
+  holiday_type  ENUM('festival','leave','other') NOT NULL DEFAULT 'leave',
+  color         VARCHAR(7)   NULL,
+  created_by    VARCHAR(100) NOT NULL,
+  created_at    TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at    TIMESTAMP    NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_holiday_date_title (holiday_date, title),
+  INDEX idx_holiday_date (holiday_date)
+);
+
+-- ─── Teams ───────────────────────────────────────────────────────────────────
+-- A team is a name, a description, a lead, and its members. The lead (or any Admin)
+-- assigns tasks to members; each member works their own list and marks them Done.
+
+CREATE TABLE IF NOT EXISTS teams (
+  id          INT AUTO_INCREMENT PRIMARY KEY,
+  name        VARCHAR(100) NOT NULL,
+  description TEXT         NULL,
+  lead_id     INT          NOT NULL,          -- whoever created the team
+  created_at  TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (lead_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS team_members (
+  team_id    INT NOT NULL,
+  account_id INT NOT NULL,
+  PRIMARY KEY (team_id, account_id),
+  FOREIGN KEY (team_id)    REFERENCES teams(id)    ON DELETE CASCADE,
+  FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE CASCADE
+);
+
+-- Team tasks are not inquiry_steps: a step is always attached to an inquiry (FK, NOT NULL)
+-- and team work often is not. `due` keeps the step's exact '01 Sep 2026 · 02:30 PM' shape so
+-- due_ts() / is_late() read it unchanged.
+CREATE TABLE IF NOT EXISTS team_tasks (
+  id           INT AUTO_INCREMENT PRIMARY KEY,
+  team_id      INT          NOT NULL,
+  assigned_to  INT          NOT NULL,
+  assigned_by  VARCHAR(100) NOT NULL,
+  title        VARCHAR(200) NOT NULL,
+  requirement  TEXT         NULL,
+  status       VARCHAR(30)  NOT NULL DEFAULT 'Pending',   -- Pending | In Progress | Done
+  remark       TEXT         NULL,                         -- what the member reports back
+  due          VARCHAR(32)  NOT NULL DEFAULT 'TBD',
+  completed_at TIMESTAMP    NULL,                         -- stamped once, on the first move to Done; > due = late
+  created_at   TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (team_id)     REFERENCES teams(id)    ON DELETE CASCADE,
+  FOREIGN KEY (assigned_to) REFERENCES accounts(id) ON DELETE CASCADE,
+  INDEX idx_tt_assignee (assigned_to, status)
+);
+
 -- ─── Seed Accounts ───────────────────────────────────────────────────────────
+-- ─── Project categories (Add Inquiry dropdown) ───────────────────────────────
+-- Online / Offline are built-in. Staff can add more names; they show for everyone.
+
+CREATE TABLE IF NOT EXISTS project_categories (
+  id         INT AUTO_INCREMENT PRIMARY KEY,
+  name       VARCHAR(100) NOT NULL,
+  is_default TINYINT(1)   NOT NULL DEFAULT 0,
+  created_by VARCHAR(100) NULL,
+  created_at TIMESTAMP    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_category_name (name)
+);
+
+INSERT INTO project_categories (name, is_default, created_by) VALUES
+('Online', 1, 'system'),
+('Offline', 1, 'system');
+
 -- One per role, all approved so they can log in immediately.
 -- To regenerate a hash: php -r "echo password_hash('yourpassword', PASSWORD_DEFAULT);"
 
@@ -213,3 +336,15 @@ INSERT INTO accounts (name, email, password_hash, role, status, requested_at) VA
 -- ALTER TABLE inquiry_steps ADD COLUMN completed_at TIMESTAMP NULL AFTER status;
 -- ALTER TABLE inquiries ADD COLUMN closed_at TIMESTAMP NULL AFTER outcome_reason;
 -- Run migrate.php instead — it also backfills both stamps for pre-existing rows.
+-- 2026-09-15
+-- CREATE TABLE warnings (see above) — run the block above directly on existing DBs.
+-- 2026-09-22
+-- CREATE TABLE teams, team_members, team_tasks (see above) — or just open the Teams tab:
+-- api/teams.php creates all three on first use, the same way api/warnings.php does.
+-- 2026-09-30
+-- CREATE TABLE call_notes (see above) — or open Call Notes; api/notes.php creates it on first use.
+-- 2026-10-01
+-- CREATE TABLE resources (see above) — or open Resources; api/resources.php creates it on first use.
+-- 2026-10-24
+-- ALTER TABLE inquiries ADD COLUMN project_category VARCHAR(100) NULL AFTER inquiry_type;
+-- CREATE TABLE project_categories (see above) — or open Add Inquiry; api/categories.php creates + seeds on first use.

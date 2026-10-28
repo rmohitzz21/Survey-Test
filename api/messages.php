@@ -8,6 +8,7 @@ $user = current_user();
 
 try {
 $b      = get_json_body();
+if (strtoupper($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') require_csrf($b);
 $action = $b['action'] ?? ($_GET['action'] ?? '');
 
 // UAT/prod may not have run migrate.php — create/patch the table on first use.

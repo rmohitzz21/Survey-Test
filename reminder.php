@@ -16,8 +16,17 @@ $allFollowUps = $stmt->fetchAll();
 foreach ($allFollowUps as &$_fu) { $_fu['completed'] = (int)$_fu['completed']; }
 unset($_fu);
 
-// Inquiry list for "add" dropdown (id + client only)
-$inqList = $pdo->query("SELECT id,client,company FROM inquiries ORDER BY created_at DESC")->fetchAll();
+// Inquiry list for "add" dropdown (id + client only) — members only see inquiries they can access
+if (is_admin()) {
+    $inqList = $pdo->query("SELECT id,client,company FROM inquiries ORDER BY created_at DESC")->fetchAll();
+} else {
+    $inqStmt = $pdo->prepare("SELECT DISTINCT i.id,i.client,i.company FROM inquiries i
+        LEFT JOIN inquiry_steps s ON s.inquiry_id=i.id
+        WHERE i.created_by=? OR i.current_owner=? OR s.assigned_to=? OR s.assigned_by=?
+        ORDER BY i.created_at DESC");
+    $inqStmt->execute([$user['name'], $user['name'], $user['name'], $user['name']]);
+    $inqList = $inqStmt->fetchAll();
+}
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -276,6 +285,12 @@ $inqList = $pdo->query("SELECT id,client,company FROM inquiries ORDER BY created
 </div>
 
 <script>
+window.__spCsrf = <?= json_encode(csrf_token()) ?>;
+function spHeaders(json = true) {
+  const h = { 'X-CSRF-Token': window.__spCsrf || '' };
+  if (json) h['Content-Type'] = 'application/json';
+  return h;
+}
 function reminderApp() {
   return {
     followUps: <?= json_encode($allFollowUps, JSON_HEX_TAG) ?>,
@@ -311,12 +326,12 @@ function reminderApp() {
     },
 
     async complete(fu) {
-      const r = await fetch('api/followup.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'complete',id:fu.id})}).then(r=>r.json());
+      const r = await fetch('api/followup.php',{method:'POST',headers:spHeaders(true),body:JSON.stringify({action:'complete',id:fu.id})}).then(r=>r.json());
       if (r.ok) { fu.completed=1; fu.completed_by=this.currentUser; this.toast('Done!','success'); }
     },
 
     async del(fu) {
-      const r = await fetch('api/followup.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'delete',id:fu.id})}).then(r=>r.json());
+      const r = await fetch('api/followup.php',{method:'POST',headers:spHeaders(true),body:JSON.stringify({action:'delete',id:fu.id})}).then(r=>r.json());
       if (r.ok) { this.followUps=this.followUps.filter(f=>f.id!==fu.id); }
     },
 
@@ -326,7 +341,7 @@ function reminderApp() {
       if (!this.addForm.note.trim()) { this.addErr='Note is required.'; return; }
       if (!this.addForm.date) { this.addErr='Date is required.'; return; }
       const body = { action:'add', inquiryId:this.addForm.inquiryId, note:this.addForm.note, date:this.addForm.date, time:this.addForm.time||null, assignedTo:this.addForm.assignedTo||this.currentUser };
-      const r = await fetch('api/followup.php',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
+      const r = await fetch('api/followup.php',{method:'POST',headers:spHeaders(true),body:JSON.stringify(body)}).then(r=>r.json());
       if (r.ok) {
         this.followUps.push({id:r.id,inquiry_id:this.addForm.inquiryId,note:this.addForm.note,follow_up_date:this.addForm.date,follow_up_time:this.addForm.time||null,assigned_to:this.addForm.assignedTo||this.currentUser,client:'',company:'',completed:0,created_by:this.currentUser});
         this.addOpen=false;

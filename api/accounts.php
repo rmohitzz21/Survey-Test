@@ -5,13 +5,15 @@ sp_session_start();
 require_auth_json();
 
 $method = $_SERVER['REQUEST_METHOD'];
-$b      = get_json_body();
+$b      = ($method === 'GET') ? [] : get_json_body();
+if ($method === 'POST') require_csrf($b);
 $action = $b['action'] ?? '';
 
 if (!is_admin()) json_response(['ok'=>false,'message'=>'Access denied'], 403);
 
 function accounts_list(PDO $pdo): array {
-    return $pdo->query("SELECT id,name,email,role,status,requested_at FROM accounts ORDER BY id")->fetchAll();
+    // Mirrors load_accounts() in includes/functions.php — keep both column lists in sync.
+    return $pdo->query("SELECT id,name,email,role,role_description,status,requested_at FROM accounts ORDER BY id")->fetchAll();
 }
 
 // GET — list accounts
@@ -50,10 +52,20 @@ if ($method === 'POST') {
         $pdo->prepare("UPDATE accounts SET role=? WHERE id=?")->execute([$b['role'],$b['id']]);
         json_response(['ok'=>true,'data'=>accounts_list($pdo)]);
     }
+    // ─── Role description ────────────────────────────────────────────────────
+    if ($action === 'role_description') {
+        $id = (int)($b['id'] ?? 0);
+        $desc = trim($b['description'] ?? '');
+        $pdo->prepare("UPDATE accounts SET role_description=? WHERE id=?")->execute([$desc !== '' ? $desc : null, $id]);
+        json_response(['ok'=>true,'data'=>accounts_list($pdo)]);
+    }
     // ─── Delete (Master Admin only) ──────────────────────────────────────────
     if ($action === 'delete') {
         if (!is_master_admin()) json_response(['ok'=>false,'message'=>'Only Master Admin can delete accounts'], 403);
-        $pdo->prepare("DELETE FROM accounts WHERE id=?")->execute([$b['id']]);
+        $id = (int)($b['id'] ?? 0);
+        if ($id === (int)(current_user()['id'] ?? 0))
+            json_response(['ok'=>false,'message'=>'You cannot delete your own account'], 400);
+        $pdo->prepare("DELETE FROM accounts WHERE id=?")->execute([$id]);
         json_response(['ok'=>true,'data'=>accounts_list($pdo)]);
     }
     // ─── Direct Add (Master Admin only) ──────────────────────────────────────

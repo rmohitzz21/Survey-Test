@@ -3,14 +3,16 @@ require_once '../includes/auth.php';
 require_once '../includes/db.php';
 require_once '../includes/functions.php';
 sp_session_start();
-require_auth_json();
+require_staff_json();
 
 $user = current_user();
 $ENTITLEMENT = 18; // calendar days per year
-$LEAVE_TYPES = ['Casual Leave','Half Day','Sick Leave','Emergency Leave','WFH'];
+// Filter / history list — includes legacy Half Day so old rows stay filterable.
+$LEAVE_TYPES = array_values(array_unique(array_merge(LEAVE_ALL_TYPES, ['Half Day'])));
 
 try {
 $b      = get_json_body();
+if (strtoupper($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') require_csrf($b);
 $action = $b['action'] ?? ($_GET['action'] ?? '');
 
 $pdo->exec("CREATE TABLE IF NOT EXISTS leave_requests (
@@ -71,24 +73,36 @@ if ($action === 'list') {
         $rows = $stmt->fetchAll();
         $pendingCount = 0;
     }
-    json_response(['ok'=>true, 'summary'=>$summary, 'data'=>$rows, 'pendingCount'=>$pendingCount, 'types'=>$LEAVE_TYPES]);
+    json_response([
+        'ok'=>true, 'summary'=>$summary, 'data'=>$rows, 'pendingCount'=>$pendingCount,
+        'types'=>$LEAVE_TYPES,
+        'advanceTypes'=>LEAVE_ADVANCE_TYPES,
+        'shortNoticeTypes'=>LEAVE_SHORT_TYPES,
+        'noticeHours'=>(int)(LEAVE_NOTICE_SECONDS / 3600),
+    ]);
 }
 
 if ($action === 'request') {
     if (($user['role'] ?? '') === 'Client') json_response(['ok'=>false,'message'=>'Clients cannot request leave.'], 403);
     if (is_admin()) json_response(['ok'=>false,'message'=>'Admins review leave requests and do not submit them.'], 403);
     $type   = trim($b['leaveType'] ?? 'Casual Leave');
-    if (!in_array($type, $LEAVE_TYPES, true)) json_response(['ok'=>false,'message'=>'Please select a valid leave type.'], 400);
     $start  = $b['startDate'] ?? '';
     $end    = $b['endDate'] ?? '';
     $reason = trim($b['reason'] ?? '');
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $start) || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $end))
         json_response(['ok'=>false,'message'=>'Start and end dates are required.'], 400);
     if ($reason === '') json_response(['ok'=>false,'message'=>'Please add a reason for this leave.'], 400);
-    if ($type === 'Half Day') $end = $start;
-    $days = $type === 'Half Day' ? 0.5 : $days_between($start, $end);
-    if ($days < 0.5) json_response(['ok'=>false,'message'=>'End date cannot be before start date.'], 400);
     if ($start < date('Y-m-d')) json_response(['ok'=>false,'message'=>'Leave cannot start in the past.'], 400);
+    // ≥12h before start → Casual / WFH / Sick; otherwise only Emergency Leave.
+    if (!leave_type_allowed($type, $start)) {
+        $allowed = leave_types_for_start($start);
+        $hint = leave_has_notice($start)
+            ? 'Casual Leave, WFH and Sick Leave need at least 12 hours notice.'
+            : 'Less than 12 hours notice — only Emergency Leave can be requested.';
+        json_response(['ok'=>false,'message'=>$hint.' Allowed: '.implode(', ', $allowed).'.'], 400);
+    }
+    $days = $days_between($start, $end);
+    if ($days < 1) json_response(['ok'=>false,'message'=>'End date cannot be before start date.'], 400);
 
     $ov = $pdo->prepare("SELECT id FROM leave_requests WHERE account_id=? AND status IN ('pending','approved') AND start_date<=? AND end_date>=?");
     $ov->execute([$uid, $end, $start]);
@@ -99,15 +113,16 @@ if ($action === 'request') {
 
     $pdo->prepare("INSERT INTO leave_requests (account_id,leave_type,start_date,end_date,days,reason) VALUES (?,?,?,?,?,?)")
         ->execute([$uid, $type, $start, $end, $days, $reason]);
+    $leaveId = (int)$pdo->lastInsertId(); // capture before notify_user() inserts into notifications
 
     $label = $start === $end ? date('d M Y', strtotime($start)) : date('d M Y', strtotime($start)).' – '.date('d M Y', strtotime($end));
-    $dayTxt = $type === 'Half Day' ? 'half day' : ($days.' day'.($days==1?'':'s'));
+    $dayTxt = $days.' day'.($days==1?'':'s');
     $admins = $pdo->prepare("SELECT name FROM accounts WHERE role IN ('Master Admin','Admin') AND status='approved' AND name<>?");
     $admins->execute([$user['name']]);
     foreach ($admins->fetchAll() as $row) {
         notify_user($pdo, $row['name'], 'Leave request — '.$user['name'], $user['name'].' requested '.$type.' ('.$dayTxt.', '.$label.').');
     }
-    json_response(['ok'=>true, 'id'=>(int)$pdo->lastInsertId()]);
+    json_response(['ok'=>true, 'id'=>$leaveId]);
 }
 
 if ($action === 'decide') {

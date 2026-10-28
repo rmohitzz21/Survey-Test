@@ -9,6 +9,7 @@ const app = {
   rmFollowUps: [],
   calUser: '',
   todayStr: '2026-08-28',
+  holidays: [],
 
   _inqBelongsTo(inq, name) {
     return inq.current_owner===name || inq.created_by===name
@@ -41,10 +42,17 @@ const app = {
     const [y, mo] = this.calMonth.split('-').map(Number);
     const counts  = this.calCounts;
     const fu      = this.calFuCounts;
+    const byDate  = {};
+    (this.holidays || []).forEach(h => { if (h.holiday_date) byDate[h.holiday_date] = h; });
     const cells   = Array.from({ length: new Date(y, mo-1, 1).getDay() }, () => null);
     for (let d = 1; d <= new Date(y, mo, 0).getDate(); d++) {
       const key = this.calMonth + '-' + String(d).padStart(2,'0');
-      cells.push({ key, day: d, count: counts[key] || 0, fu: fu[key] || 0 });
+      const dow = new Date(y, mo-1, d).getDay();
+      cells.push({
+        key, day: d, count: counts[key] || 0, fu: fu[key] || 0,
+        isSun: dow === 0, isSat: dow === 6,
+        holiday: byDate[key] || null,
+      });
     }
     return cells;
   },
@@ -375,5 +383,20 @@ app.inquiries = [
   { id:'B', outcome:'In Progress', stage:'Inquiry', steps:[step({ id:8, due:'10 Aug 2026', overdue:true })] },
 ];
 assert.deepStrictEqual(app.myTasks.map(t => t.inq.id), ['B','A'], 'oldest overdue first');
+
+// ── Sundays + festival / yearly leave on the grid ──
+app.calMonth = '2026-09';
+app.holidays = [
+  { id: 1, holiday_date: '2026-09-15', title: 'Ganesh Chaturthi', holiday_type: 'festival', color: '#F79009' },
+  { id: 2, holiday_date: '2026-09-22', title: 'Company leave', holiday_type: 'leave', color: '#7A5AF8' },
+];
+const sep = app.calCells.filter(Boolean);
+assert.ok(sep.some(c => c.key === '2026-09-06' && c.isSun), '6 Sep 2026 is a Sunday');
+assert.ok(sep.every(c => !c.isSun || new Date(c.key + 'T12:00:00').getDay() === 0), 'isSun only on Sundays');
+const fest = sep.find(c => c.key === '2026-09-15');
+assert.ok(fest && fest.holiday && fest.holiday.holiday_type === 'festival', 'festival day carries holiday meta');
+const leave = sep.find(c => c.key === '2026-09-22');
+assert.ok(leave && leave.holiday && leave.holiday.title === 'Company leave', 'yearly leave day carries holiday meta');
+assert.strictEqual(sep.find(c => c.key === '2026-09-14').holiday, null, 'ordinary weekday has no holiday');
 
 console.log('ok');
