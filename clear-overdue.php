@@ -1,15 +1,15 @@
 <?php
-// Access: /clear-overdue.php?token=sp_del_2026
-if (($_GET['token'] ?? '') !== 'sp_del_2026') {
-    http_response_code(403); die('Forbidden');
-}
-
+// Access: log in as Master Admin, then open /clear-overdue.php
+require_once __DIR__.'/includes/auth.php';
+require_utility_master_admin('login.php');
 require_once __DIR__.'/includes/db.php';
 
+$csrf  = csrf_token();
 $msg   = '';
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_csrf();
     $id = trim($_POST['inquiry_id'] ?? '');
     if (!$id) {
         $error = 'Please enter an Inquiry ID.';
@@ -24,7 +24,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // Same closed signal the app itself sends from the stage-update UI
             // closed_at too, or force-closing here would wipe the miss out of the admin report
             $pdo->prepare("UPDATE inquiries SET stage='Closure', outcome='Inquiry Closed', closed_at=COALESCE(closed_at,NOW()) WHERE id=?")->execute([$id]);
-            $msg = 'Inquiry <strong>'.$id.'</strong> ('.$inq['client'].($inq['company'] ? ' · '.$inq['company'] : '').') marked as completed — no longer overdue.';
+            $msg = 'Inquiry <strong>'.$id.'</strong> ('.$inq['client'].($inq['company'] ? ' · '.$inq['company'] : '').') marked as completed no longer overdue.';
             $inq = null;
         }
     }
@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Clear Overdue — Survey Pacific</title>
+<title>Clear Overdue Survey Pacific</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F4F6F8;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem}
@@ -66,13 +66,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="card">
   <div class="header">
     <h1>Clear Overdue</h1>
-    <p>Survey Pacific — Admin Tool</p>
+    <p>Survey Pacific Admin Tool</p>
   </div>
   <div class="body">
 
     <?php if ($msg): ?>
       <div class="msg-ok"><?= $msg ?></div>
-      <a href="?token=sp_del_2026" style="text-align:center;font-size:12px;color:#1268F3;font-weight:700;text-decoration:none">← Clear another</a>
+      <a href="" style="text-align:center;font-size:12px;color:#1268F3;font-weight:700;text-decoration:none">← Clear another</a>
 
     <?php else: ?>
 
@@ -88,9 +88,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <div class="meta"><?= htmlspecialchars($inq['client']) ?><?= $inq['company'] ? ' · '.htmlspecialchars($inq['company']) : '' ?></div>
           <div class="meta">Current stage: <?= htmlspecialchars($inq['stage']) ?> · <?= htmlspecialchars($inq['outcome']) ?></div>
           <form method="POST" class="confirm-row">
+            <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="inquiry_id" value="<?= htmlspecialchars($inq['id']) ?>">
             <input type="hidden" name="confirm" value="1">
-            <a href="?token=sp_del_2026" class="btn-cancel" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Cancel</a>
+            <a href="" class="btn-cancel" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Cancel</a>
             <button type="submit" class="btn-confirm">Yes, Mark Completed</button>
           </form>
         </div>
@@ -98,13 +99,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php else: ?>
         <!-- Entry step -->
         <form method="POST">
+          <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
           <div>
             <label>Inquiry ID</label>
             <input type="text" name="inquiry_id" placeholder="e.g. SP-2026-013" value="<?= htmlspecialchars($_POST['inquiry_id'] ?? '') ?>" autofocus>
           </div>
           <button type="submit" class="btn-delete" style="margin-top:.25rem">Find &amp; Clear →</button>
         </form>
-        <p class="warning">⚠ This marks the inquiry as completed (Closure / Inquiry Closed), same as closing it in the app — it will no longer show as overdue.</p>
+        <p class="warning">⚠ This marks the inquiry as completed (Closure / Inquiry Closed), same as closing it in the app it will no longer show as overdue.</p>
       <?php endif; ?>
 
     <?php endif; ?>

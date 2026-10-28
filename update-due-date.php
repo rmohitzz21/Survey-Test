@@ -1,16 +1,16 @@
 <?php
-// Access: /update-due-date.php?token=sp_due_2026
-if (($_GET['token'] ?? '') !== 'sp_due_2026') {
-    http_response_code(403); die('Forbidden');
-}
-
+// Access: log in as Master Admin, then open /update-due-date.php
+require_once __DIR__.'/includes/auth.php';
+require_utility_master_admin('login.php');
 require_once __DIR__.'/includes/db.php';
 
+$csrf  = csrf_token();
 $msg   = '';
 $error = '';
 $inq   = null;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_csrf();
     $id = trim($_POST['inquiry_id'] ?? '');
     if (!$id) {
         $error = 'Please enter an Inquiry ID.';
@@ -76,7 +76,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     <?php if ($msg): ?>
       <div class="msg-ok"><?= $msg ?></div>
-      <a href="?token=sp_due_2026" style="text-align:center;font-size:12px;color:#1268F3;font-weight:700;text-decoration:none">← Update another</a>
+      <a href="update-due-date.php" style="text-align:center;font-size:12px;color:#1268F3;font-weight:700;text-decoration:none">← Update another</a>
 
     <?php else: ?>
 
@@ -92,6 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <div class="meta"><?= htmlspecialchars($inq['client']) ?><?= $inq['company'] ? ' · '.htmlspecialchars($inq['company']) : '' ?></div>
           <div class="current">Current due date: <strong><?= htmlspecialchars($inq['due_date'] ?: 'TBD') ?></strong></div>
           <form method="POST">
+            <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="inquiry_id" value="<?= htmlspecialchars($inq['id']) ?>">
             <div style="margin-top:.75rem">
               <label>New Due Date</label>
@@ -99,7 +100,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                      value="<?= ($inq['due_date'] && $inq['due_date'] !== 'TBD') ? date('Y-m-d', strtotime($inq['due_date'])) : '' ?>">
             </div>
             <div class="confirm-row">
-              <a href="?token=sp_due_2026" class="btn-cancel" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Cancel</a>
+              <a href="update-due-date.php" class="btn-cancel" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Cancel</a>
               <button type="submit" class="btn-confirm">Save</button>
             </div>
           </form>
@@ -108,6 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php else: ?>
         <!-- Entry step -->
         <form method="POST">
+          <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
           <div>
             <label>Inquiry ID</label>
             <input type="text" name="inquiry_id" placeholder="e.g. SP-2026-013" value="<?= htmlspecialchars($_POST['inquiry_id'] ?? '') ?>" autofocus>

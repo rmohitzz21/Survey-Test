@@ -1,15 +1,15 @@
 <?php
-// Access: /delete-inquiry.php?token=sp_del_2026
-if (($_GET['token'] ?? '') !== 'sp_del_2026') {
-    http_response_code(403); die('Forbidden');
-}
-
+// Access: log in as Master Admin, then open /delete-inquiry.php
+require_once __DIR__.'/includes/auth.php';
+require_utility_master_admin('login.php');
 require_once __DIR__.'/includes/db.php';
 
+$csrf  = csrf_token();
 $msg   = '';
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    require_csrf();
     $id = trim($_POST['inquiry_id'] ?? '');
     if (!$id) {
         $error = 'Please enter an Inquiry ID.';
@@ -21,7 +21,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if (!$inq) {
             $error = 'Inquiry "'.$id.'" not found.';
         } elseif (isset($_POST['confirm']) && $_POST['confirm'] === '1') {
-            // Cascade delete — same order as api/inquiry.php delete_inquiry
+            // Cascade delete same order as api/inquiry.php delete_inquiry
             $inqAtts = $pdo->prepare("SELECT filename FROM inquiry_attachments WHERE inquiry_id=?");
             $inqAtts->execute([$id]);
             foreach ($inqAtts->fetchAll() as $a) {
@@ -60,7 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Delete Inquiry — Survey Pacific</title>
+<title>Delete Inquiry Survey Pacific</title>
 <style>
   *{box-sizing:border-box;margin:0;padding:0}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#F4F6F8;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem}
@@ -92,13 +92,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <div class="card">
   <div class="header">
     <h1>Delete Inquiry</h1>
-    <p>Survey Pacific — Admin Tool</p>
+    <p>Survey Pacific Admin Tool</p>
   </div>
   <div class="body">
 
     <?php if ($msg): ?>
       <div class="msg-ok"><?= $msg ?></div>
-      <a href="?token=sp_del_2026" style="text-align:center;font-size:12px;color:#1268F3;font-weight:700;text-decoration:none">← Delete another</a>
+      <a href="" style="text-align:center;font-size:12px;color:#1268F3;font-weight:700;text-decoration:none">← Delete another</a>
 
     <?php else: ?>
 
@@ -114,9 +114,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
           <div class="meta"><?= htmlspecialchars($inq['client']) ?><?= $inq['company'] ? ' · '.htmlspecialchars($inq['company']) : '' ?></div>
           <p style="margin-top:.75rem;margin-bottom:0;font-size:11px;color:#B42318">This will delete all steps, history, attachments, follow-ups and notifications. This cannot be undone.</p>
           <form method="POST" class="confirm-row">
+            <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
             <input type="hidden" name="inquiry_id" value="<?= htmlspecialchars($inq['id']) ?>">
             <input type="hidden" name="confirm" value="1">
-            <a href="?token=sp_del_2026" class="btn-cancel" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Cancel</a>
+            <a href="" class="btn-cancel" style="display:flex;align-items:center;justify-content:center;text-decoration:none">Cancel</a>
             <button type="submit" class="btn-confirm">Yes, Delete</button>
           </form>
         </div>
@@ -124,6 +125,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       <?php else: ?>
         <!-- Entry step -->
         <form method="POST">
+          <input type="hidden" name="csrf" value="<?= htmlspecialchars($csrf, ENT_QUOTES, 'UTF-8') ?>">
           <div>
             <label>Inquiry ID</label>
             <input type="text" name="inquiry_id" placeholder="e.g. SP-2026-013" value="<?= htmlspecialchars($_POST['inquiry_id'] ?? '') ?>" autofocus>
