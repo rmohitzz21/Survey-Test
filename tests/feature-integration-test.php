@@ -325,6 +325,114 @@ ok('Admin loadAll follow-ups', ($fuAll['json']['ok'] ?? false) === true);
 $fuDone = http($adminJar, 'POST', "$BASE/api/followup.php", ['action' => 'complete', 'id' => $fuId]);
 ok('Complete follow-up', ($fuDone['json']['ok'] ?? false) === true);
 
+// ── 4b. Create inquiry with optional follow-up ───────────────────────────────
+echo "\n4b. Create inquiry ± optional follow-up\n";
+$stampFu = date('YmdHis');
+$qaNoFuClient = "QA NoFU $stampFu";
+$qaWithFuClient = "QA WithFU $stampFu";
+$qaBadFuClient = "QA BadFU $stampFu";
+$inqNoFuId = null;
+$inqWithFuId = null;
+$createFuId = null;
+
+$baseCreate = [
+    'date' => date('d M Y'),
+    'inquiryType' => 'Client Project',
+    'company' => 'QA Follow-up Co',
+    'country' => 'India',
+    'clientType' => 'New',
+    'requirement' => 'QA create-time follow-up coverage.',
+    'dueDate' => date('d M Y', strtotime('+5 days')),
+    'dueTime' => '16:00',
+    'email' => 'qa.followup@example.com',
+    'phone' => '9888888888',
+    'assignTo' => 'Team Member',
+    'taskInstruction' => 'QA follow-up create path.',
+];
+
+$createNoFu = http($adminJar, 'POST', "$BASE/api/inquiries.php", array_merge($baseCreate, [
+    'client' => $qaNoFuClient,
+    'scheduleFollowUp' => false,
+]));
+$inqNoFuId = $createNoFu['json']['id'] ?? null;
+ok(
+    'Create inquiry without follow-up',
+    ($createNoFu['json']['ok'] ?? false) === true && is_string($inqNoFuId),
+    (string)$inqNoFuId
+);
+ok('Create without follow-up returns null followUpId', ($createNoFu['json']['followUpId'] ?? null) === null);
+
+$noFuLoad = http($adminJar, 'POST', "$BASE/api/followup.php", ['action' => 'load', 'inquiryId' => $inqNoFuId]);
+ok(
+    'No follow-up rows for scheduleFollowUp:false',
+    ($noFuLoad['json']['ok'] ?? false) === true && count($noFuLoad['json']['data'] ?? []) === 0,
+    'count=' . count($noFuLoad['json']['data'] ?? [])
+);
+
+$fuDate = date('Y-m-d', strtotime('+3 days'));
+$fuNote = 'QA create-time reminder note';
+$createWithFu = http($adminJar, 'POST', "$BASE/api/inquiries.php", array_merge($baseCreate, [
+    'client' => $qaWithFuClient,
+    'scheduleFollowUp' => true,
+    'followUpNote' => $fuNote,
+    'followUpDate' => $fuDate,
+    'followUpTime' => '10:30',
+    'followUpAssignedTo' => 'Team Member',
+]));
+$inqWithFuId = $createWithFu['json']['id'] ?? null;
+$createFuId = $createWithFu['json']['followUpId'] ?? null;
+ok(
+    'Create inquiry with follow-up',
+    ($createWithFu['json']['ok'] ?? false) === true && is_string($inqWithFuId) && !empty($createFuId),
+    "inq=$inqWithFuId fu=$createFuId"
+);
+
+$withFuLoad = http($adminJar, 'POST', "$BASE/api/followup.php", ['action' => 'load', 'inquiryId' => $inqWithFuId]);
+$matchedFu = null;
+foreach (($withFuLoad['json']['data'] ?? []) as $row) {
+    if ((int)($row['id'] ?? 0) === (int)$createFuId) {
+        $matchedFu = $row;
+        break;
+    }
+}
+ok('Load create-time follow-up by inquiry', $matchedFu !== null);
+ok(
+    'Create-time follow-up linked to inquiry',
+    $matchedFu
+        && ($matchedFu['inquiry_id'] ?? '') === $inqWithFuId
+        && ($matchedFu['note'] ?? '') === $fuNote
+        && ($matchedFu['follow_up_date'] ?? '') === $fuDate
+        && ($matchedFu['assigned_to'] ?? '') === 'Team Member',
+    json_encode($matchedFu ?: [])
+);
+
+$createBadFu = http($adminJar, 'POST', "$BASE/api/inquiries.php", array_merge($baseCreate, [
+    'client' => $qaBadFuClient,
+    'scheduleFollowUp' => true,
+    'followUpNote' => '',
+    'followUpDate' => $fuDate,
+]));
+ok(
+    'Missing follow-up note rejected',
+    ($createBadFu['json']['ok'] ?? true) === false && $createBadFu['code'] === 400,
+    $createBadFu['body']
+);
+ok(
+    'Validation message for missing follow-up fields',
+    stripos((string)($createBadFu['json']['message'] ?? ''), 'Follow-up note and date') !== false,
+    (string)($createBadFu['json']['message'] ?? '')
+);
+
+try {
+    $qaPdo = local_sp_work_pdo();
+    $chk = $qaPdo->prepare('SELECT COUNT(*) FROM inquiries WHERE client = ?');
+    $chk->execute([$qaBadFuClient]);
+    $badCount = (int)$chk->fetchColumn();
+    ok('Failed follow-up create left no inquiry', $badCount === 0, "count=$badCount");
+} catch (Exception $e) {
+    ok('Failed follow-up create left no inquiry', false, $e->getMessage());
+}
+
 // ── 5. Member row-level filtering ────────────────────────────────────────────
 echo "\n5. Authorisation — row-level filter\n";
 $memList = http($memberJar, 'GET', "$BASE/api/inquiries.php");
@@ -660,6 +768,19 @@ $del = http($adminJar, 'POST', "$BASE/api/inquiry.php", [
     'id' => $inqId,
 ]);
 ok('Master Admin can delete inquiry', ($del['json']['ok'] ?? false) === true, $del['body']);
+
+foreach ([$inqNoFuId, $inqWithFuId] as $qaFuInqId) {
+    if (!is_string($qaFuInqId) || $qaFuInqId === '') continue;
+    $delFuInq = http($adminJar, 'POST', "$BASE/api/inquiry.php", [
+        'action' => 'delete_inquiry',
+        'id' => $qaFuInqId,
+    ]);
+    ok(
+        "Cleanup create-time FU inquiry $qaFuInqId",
+        ($delFuInq['json']['ok'] ?? false) === true,
+        $delFuInq['body']
+    );
+}
 
 $delUser = http($adminJar, 'POST', "$BASE/api/accounts.php", [
     'action' => 'delete',
