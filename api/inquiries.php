@@ -72,6 +72,28 @@ try {
         }
     }
 
+    // Validate optional create-time follow-up before inserting the inquiry
+    $wantFollowUp = !empty($b['scheduleFollowUp']);
+    $fuNote = trim((string)($b['followUpNote'] ?? ''));
+    $fuDate = (string)($b['followUpDate'] ?? '');
+    $fuTimeRaw = trim((string)($b['followUpTime'] ?? ''));
+    $fuTime = preg_match('/^\d{2}:\d{2}$/', $fuTimeRaw) ? $fuTimeRaw : null;
+    $fuAssigned = trim((string)($b['followUpAssignedTo'] ?? ''));
+    if ($fuAssigned === '') $fuAssigned = $createdBy;
+    if ($wantFollowUp && ($fuNote === '' || !preg_match('/^\d{4}-\d{2}-\d{2}$/', $fuDate))) {
+        json_response(['ok'=>false,'message'=>'Follow-up note and date are required when scheduling a reminder.'], 400);
+    }
+
+    // Combined create + follow-up must be atomic. Notifications wait until after commit
+    // so a rolled-back create never leaves a dangling alert.
+    $followUpId = null;
+    $notifyTask = null; // [assignedTo, title, body, inquiryId]
+    $notifyFu   = null;
+
+    if ($wantFollowUp) {
+        $pdo->beginTransaction();
+    }
+
     $id = null;
     for ($try = 0; $try < 3; $try++) {
         try {
@@ -121,7 +143,30 @@ try {
         if ($stepDue !== 'TBD' && !empty($b['dueTime'])) $stepDue .= ' · '.date('h:i A', strtotime($b['dueTime']));
         $stepIns->execute([$id,$createdBy,$b['assignTo'],$instruction,'Pending',$stepDue]);
         $preview = mb_strimwidth(strip_tags($instruction), 0, 80, '…');
-        notify_user($pdo, $b['assignTo'], 'New task — '.$id, $createdBy.' assigned: '.$preview, $id);
+        $notifyTask = [$b['assignTo'], 'New task — '.$id, $createdBy.' assigned: '.$preview, $id];
+    }
+
+    // Optional follow-up / reminder at create time (same table as Reminders / api/followup.php)
+    if ($wantFollowUp) {
+        $pdo->prepare("INSERT INTO follow_ups (inquiry_id,note,follow_up_date,follow_up_time,assigned_to,created_by) VALUES (?,?,?,?,?,?)")
+            ->execute([$id, $fuNote, $fuDate, $fuTime, $fuAssigned, $createdBy]);
+        $followUpId = (int)$pdo->lastInsertId();
+        if ($fuAssigned !== $user['name']) {
+            $notifyFu = [
+                $fuAssigned,
+                'Follow-up scheduled — '.$id,
+                $user['name'].' scheduled a follow-up on '.date('d M Y', strtotime($fuDate)).': '.$fuNote,
+                $id,
+            ];
+        }
+        $pdo->commit();
+    }
+
+    if ($notifyTask) {
+        notify_user($pdo, $notifyTask[0], $notifyTask[1], $notifyTask[2], $notifyTask[3]);
+    }
+    if ($notifyFu) {
+        notify_user($pdo, $notifyFu[0], $notifyFu[1], $notifyFu[2], $notifyFu[3]);
     }
 
     // Return only the new inquiry — much faster than reloading everything
@@ -137,9 +182,13 @@ try {
     $sStmt->execute([$id]);
     $inqRow['steps'] = array_map(fn($s) => array_merge($s, ['attachments'=>[], 'overdue'=>false, 'late'=>false]), $sStmt->fetchAll());
 
-    json_response(['ok'=>true,'id'=>$id,'inquiry'=>$inqRow]);
+    json_response(['ok'=>true,'id'=>$id,'inquiry'=>$inqRow,'followUpId'=>$followUpId]);
 } catch (Exception $e) {
-    json_response(['ok'=>false,'message'=>'Server error: '.$e->getMessage()], 500);
+    if ($pdo->inTransaction()) {
+        try { $pdo->rollBack(); } catch (Exception $ignored) {}
+    }
+    error_log('inquiries create failed: ' . $e->getMessage());
+    json_response(['ok'=>false,'message'=>'Server error. Please try again.'], 500);
 }
 }
 

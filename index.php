@@ -3424,6 +3424,55 @@ $stepStatuses = ['New','Pending','In Progress','Client/Team Se Reply Pending','C
           </div>
         </div>
       </div>
+      <!-- Optional follow-up / reminder at create time (Reminders view remains available) -->
+      <div class="px-5 pb-4 pt-1">
+        <div class="rounded-[10px] border border-[#E4E7EC] bg-[#F8FAFC] p-3.5 space-y-3">
+          <label class="flex items-start gap-2.5 cursor-pointer select-none">
+            <input type="checkbox" x-model="addInquiryForm.scheduleFollowUp"
+                   class="mt-0.5 w-3.5 h-3.5 cursor-pointer accent-[#1268F3] shrink-0"
+                   @change="if(!addInquiryForm.scheduleFollowUp){ delete addInquiryForm.errors.followUpNote; delete addInquiryForm.errors.followUpDate; }" />
+            <span>
+              <span class="block text-[12px] font-bold text-[#172B3A]">Schedule follow-up / reminder</span>
+              <span class="block text-[10px] text-[#667085] mt-0.5">Optional — creates the same Reminders follow-up without leaving this form.</span>
+            </span>
+          </label>
+          <div x-show="addInquiryForm.scheduleFollowUp" x-cloak class="space-y-3 pt-1 border-t border-[#E4E7EC]">
+            <div>
+              <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Note <span class="text-[#B42318]">*</span></label>
+              <input type="text" x-model="addInquiryForm.followUpNote" placeholder="e.g. Call client for proposal feedback"
+                     :class="addInquiryForm.errors.followUpNote ? 'border-[#B42318]' : 'border-[#E4E7EC]'"
+                     @input="if(addInquiryForm.followUpNote.trim()) delete addInquiryForm.errors.followUpNote"
+                     class="w-full text-[13px] border rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white" />
+              <p x-show="addInquiryForm.errors.followUpNote" class="text-[10px] font-semibold text-[#B42318] mt-0.5" x-text="addInquiryForm.errors.followUpNote"></p>
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+              <div>
+                <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Date <span class="text-[#B42318]">*</span></label>
+                <input type="date" x-model="addInquiryForm.followUpDate"
+                       :class="addInquiryForm.errors.followUpDate ? 'border-[#B42318]' : 'border-[#E4E7EC]'"
+                       @change="if(addInquiryForm.followUpDate) delete addInquiryForm.errors.followUpDate"
+                       class="w-full text-[13px] border rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white" />
+                <p x-show="addInquiryForm.errors.followUpDate" class="text-[10px] font-semibold text-[#B42318] mt-0.5" x-text="addInquiryForm.errors.followUpDate"></p>
+              </div>
+              <div>
+                <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Time <span class="font-normal normal-case text-[#98A2B3]">(optional)</span></label>
+                <input type="time" x-model="addInquiryForm.followUpTime"
+                       class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 focus:outline-none focus:border-[#1268F3] bg-white" />
+              </div>
+            </div>
+            <div>
+              <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1">Assigned To</label>
+              <select x-model="addInquiryForm.followUpAssignedTo"
+                      class="w-full text-[13px] border border-[#E4E7EC] rounded-[8px] px-3 py-2 bg-white focus:outline-none focus:border-[#1268F3] cursor-pointer">
+                <option value="">Me (<?= htmlspecialchars($user['name']) ?>)</option>
+                <template x-for="a in accounts.filter(a=>a.status==='approved')" :key="'fu-'+a.id">
+                  <option :value="a.name" x-text="a.name"></option>
+                </template>
+              </select>
+            </div>
+          </div>
+        </div>
+      </div>
       <!-- Attachments -->
       <div class="px-5 pb-4 pt-2">
         <label class="block text-[10px] font-bold uppercase tracking-[0.04em] text-[#667085] mb-1.5">Attachments</label>
@@ -4097,7 +4146,7 @@ function spApp() {
     stageForm: { ownership:'Open', stageNum:1, stageStep:'', remark:'', deliveryDate:'', followUpDate:'', proposalValue:'', finalValue:'', finalRemark:'', _finalRemarkErr:false },
     taskForm:  { assignedTo:'', due: new Date().toLocaleDateString('en-CA'), dueTime:'', instruction:'', errors:{} },
     newUser:   { name:'', email:'', password:'', role:'Member', customRole:'', error:'', success:'', showPass:false, saving:false, copied:false },
-    addInquiryForm: { inquiryType:'Client Project', date: new Date().toLocaleDateString('en-CA'), projectCategory:'', client:'', designation:'', company:'', country:'India', clientType:'New', requirement:'', assignTo:'', dueDate:'', dueTime:'', proposalValue:'', email:'', emailSecondary:'', phone:'', website:'', emailSubject:'', taskInstruction:'', createdBy:'', errors:{} },
+    addInquiryForm: { inquiryType:'Client Project', date: new Date().toLocaleDateString('en-CA'), projectCategory:'', client:'', designation:'', company:'', country:'India', clientType:'New', requirement:'', assignTo:'', dueDate:'', dueTime:'', proposalValue:'', email:'', emailSecondary:'', phone:'', website:'', emailSubject:'', taskInstruction:'', createdBy:'', scheduleFollowUp:false, followUpNote:'', followUpDate: new Date().toLocaleDateString('en-CA'), followUpTime:'', followUpAssignedTo:'', errors:{} },
     projectCategories: [],
     _clientAcOpen: false,
     _allClientNames: <?= json_encode($_allClientNames, JSON_HEX_TAG) ?>,
@@ -5277,6 +5326,10 @@ function spApp() {
       else if (em && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em))            e.email           = 'Enter a valid email address.';
       const em2 = this.addInquiryForm.emailSecondary.trim();
       if (em2 && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em2)) e.emailSecondary = 'Enter a valid email address.';
+      if (this.addInquiryForm.scheduleFollowUp) {
+        if (!this.addInquiryForm.followUpNote.trim()) e.followUpNote = 'Follow-up note is required.';
+        if (!this.addInquiryForm.followUpDate) e.followUpDate = 'Follow-up date is required.';
+      }
       if (Object.keys(e).length) return;
       if (this._addingInquiry) return;
       this._addingInquiry = true;
@@ -5303,7 +5356,20 @@ function spApp() {
         website: this.addInquiryForm.website.trim(),
         emailSubject: this.addInquiryForm.emailSubject.trim(),
         taskInstruction: this.addInquiryForm.taskInstruction.trim(),
+        scheduleFollowUp: !!this.addInquiryForm.scheduleFollowUp,
+        followUpNote: this.addInquiryForm.followUpNote.trim(),
+        followUpDate: this.addInquiryForm.followUpDate || '',
+        followUpTime: this.addInquiryForm.followUpTime || '',
+        followUpAssignedTo: this.addInquiryForm.followUpAssignedTo || '',
       };
+      const scheduledFu = this.addInquiryForm.scheduleFollowUp
+        ? {
+            note: this.addInquiryForm.followUpNote.trim(),
+            date: this.addInquiryForm.followUpDate,
+            time: this.addInquiryForm.followUpTime || null,
+            assignedTo: this.addInquiryForm.followUpAssignedTo || this.currentUser,
+          }
+        : null;
       const d = await this.api('api/inquiries.php', body);
       this._addingInquiry = false;
       if (d.ok) {
@@ -5314,21 +5380,35 @@ function spApp() {
         const mapped = { ...ni, _open:false, _adminRemark:ni.admin_remark||'', _adminRemarkSaving:false, _teamRemark:ni.team_remark||'', _teamRemarkSaving:false, history:[], _historyLoaded:false,
           steps:(ni.steps||[]).map(s=>({...s,_remark:s.remark||'',_saved:false,_remarkOpen:false,_instruction:s.instruction||'',_instrSaved:false})) };
         this.inquiries = [...this.inquiries, mapped];
+        if (d.followUpId && scheduledFu) {
+          this._pushDashboardFu({
+            id: d.followUpId,
+            inquiry_id: d.id,
+            note: scheduledFu.note,
+            follow_up_date: scheduledFu.date,
+            follow_up_time: scheduledFu.time,
+            assigned_to: scheduledFu.assignedTo,
+            client: mapped.client || '',
+            company: mapped.company || '',
+            completed: 0,
+            created_by: this.currentUser,
+          });
+        }
         if (files && files.length) {
           const fd = new FormData();
           fd.append('inquiry_id', d.id);
           for (const f of files) fd.append('files[]', f);
           const up = await fetch('api/upload.php', { method:'POST', headers:spHeaders(false), body: fd }).then(r=>r.json()).catch(()=>({ok:false}));
-          if (up.ok && up.saved?.length) { mapped.attachments = up.saved.map(f=>({filename:f})); this.addToast(d.id+' created + '+up.saved.length+' file(s) uploaded'); }
-          else { this.addToast('Inquiry '+d.id+' created'); this.addToast(this._uploadError(up), 'error'); }
+          if (up.ok && up.saved?.length) { mapped.attachments = up.saved.map(f=>({filename:f})); this.addToast(d.id+' created + '+up.saved.length+' file(s) uploaded'+(d.followUpId?' + follow-up':'')); }
+          else { this.addToast('Inquiry '+d.id+' created'+(d.followUpId?' with follow-up':'')); this.addToast(this._uploadError(up), 'error'); }
         } else {
-          this.addToast('Inquiry '+d.id+' created');
+          this.addToast('Inquiry '+d.id+' created'+(d.followUpId?' with follow-up':''));
         }
         this.$nextTick(() => this.checkDueWarnings());
         setTimeout(() => {
           this.addInquiryOpen = false;
           this._inquirySave = '';
-          this.addInquiryForm = { inquiryType:'Client Project', date: new Date().toLocaleDateString('en-CA'), projectCategory:'', client:'', designation:'', company:'', country:'India', clientType:'New', requirement:'', assignTo:'', dueDate:'', dueTime:'', proposalValue:'', email:'', emailSecondary:'', phone:'', website:'', emailSubject:'', taskInstruction:'', createdBy:this.currentUser, _files:null, errors:{} };
+          this.addInquiryForm = { inquiryType:'Client Project', date: new Date().toLocaleDateString('en-CA'), projectCategory:'', client:'', designation:'', company:'', country:'India', clientType:'New', requirement:'', assignTo:'', dueDate:'', dueTime:'', proposalValue:'', email:'', emailSecondary:'', phone:'', website:'', emailSubject:'', taskInstruction:'', createdBy:this.currentUser, scheduleFollowUp:false, followUpNote:'', followUpDate: new Date().toLocaleDateString('en-CA'), followUpTime:'', followUpAssignedTo:'', _files:null, errors:{} };
         }, 700);
         const newId = d.id;
         this.highlightedInq = newId;
@@ -5338,6 +5418,7 @@ function spApp() {
           if (el) el.scrollIntoView({ behavior:'smooth', block:'start' });
         });
       } else {
+        this._inquirySave = '';
         this.addInquiryForm.errors._api = d.message || 'Failed to create inquiry.';
       }
     },
