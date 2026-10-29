@@ -15,12 +15,13 @@
 // Deliberately NOT part of migrate.php: migrate re-runs on every visit and would re-seed forever.
 require_once __DIR__.'/includes/auth.php';
 require_utility_master_admin('login.php');
+require_utility_non_production();
 require_once __DIR__.'/includes/db.php';
 require_once __DIR__.'/includes/functions.php';
 $csrf = csrf_token();
 
-// Hard stop on production. Demo rows in the live portal would be indistinguishable from real work
-// to everyone except whoever reads this file, and the demo accounts have a published password.
+// Defense in depth: env guard above already blocks SP_APP_ENV=production; refuse known live DB name too.
+// Demo rows in the live portal would be indistinguishable from real work, and demo accounts have a published password.
 if (DB_NAME === 'survevap_inquiry') {
     http_response_code(403);
     die('Refusing to run against the production database ('.DB_NAME.'). Demo data is for local and UAT only.');

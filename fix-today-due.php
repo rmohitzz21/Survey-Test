@@ -9,6 +9,7 @@
 // would keep shoving due dates forward each time someone opens it.
 require_once __DIR__.'/includes/auth.php';
 require_utility_master_admin('login.php');
+require_utility_non_production();
 require_once __DIR__.'/includes/db.php';
 $csrf = csrf_token();
 
