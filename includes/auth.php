@@ -84,6 +84,33 @@ function require_utility_master_admin(string $loginRedirect = 'login.php'): void
     }
 }
 
+/**
+ * Whether SP_APP_ENV may run browser maintenance utilities.
+ * Allowlist matches db.php: only local and uat. Missing/unsupported/production → false (fail closed).
+ */
+function sp_utility_env_permitted(?string $env): bool {
+    $env = strtolower(trim((string) ($env ?? '')));
+    return $env === 'local' || $env === 'uat';
+}
+
+/**
+ * Block maintenance utilities when SP_APP_ENV is production, missing, or unsupported.
+ * Call after require_utility_master_admin(); does not replace Master Admin or CSRF checks.
+ */
+function require_utility_non_production(): void {
+    require_once __DIR__ . '/env.php';
+    sp_load_env();
+    $env = strtolower(trim((string) (sp_env('SP_APP_ENV') ?? '')));
+    if (sp_utility_env_permitted($env)) {
+        return;
+    }
+    http_response_code(403);
+    if ($env === 'production') {
+        die('Forbidden — maintenance utilities cannot run when SP_APP_ENV is production.');
+    }
+    die('Forbidden — maintenance utilities require SP_APP_ENV=local or SP_APP_ENV=uat.');
+}
+
 function require_no_auth(string $redirect = 'index.php'): void {
     sp_session_start();
     if (!empty($_SESSION['user'])) {
